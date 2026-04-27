@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Iniciar Dashboard GSMPRO
+Comment=Levantar el servidor local Next.js
+Exec=bash -c "cd /home/prllc/Escritorio/DashboardGSMPRO/dashboard && npm run dev"
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Development;
