@@ -8,10 +8,12 @@
     "start": "cd dashboard && npm start",
     "sync:shopify": "node scripts/sync-shopify.js",
     "sync:klaviyo": "node scripts/sync-klaviyo.js",
-    "sync:crisp": "node scripts/sync-crisp.js"
+    "sync:crisp": "node scripts/sync-crisp.js",
+    "sync:gsc": "node scripts/sync-gsc.js"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "googleapis": "^171.4.0"
   }
 }
