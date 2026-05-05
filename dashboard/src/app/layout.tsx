@@ -20,9 +20,9 @@ export default function RootLayout({
     <html lang="es" className="dark">
       <body className={`${inter.className} antialiased min-h-screen flex selection:bg-blue-500/30 selection:text-blue-200`}>
         <Sidebar />
-        <div className="flex-1 ml-64 flex flex-col min-h-screen relative">
+        <div className="flex-1 ml-[288px] flex flex-col min-h-screen relative">
           <Header />
-          <main className="flex-1 p-8">
+          <main className="flex-1 p-6 lg:p-8 pt-4">
             {children}
           </main>
         </div>

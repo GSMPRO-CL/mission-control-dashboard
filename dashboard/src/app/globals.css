@@ -16,19 +16,18 @@
 }
 
 :root {
-  --background: #09090b;
+  --background: #050505; /* Deeper OLED black */
   --foreground: #fafafa;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  /* A subtle radial gradient for a premium dark vibe */
-  background-image: radial-gradient(
-    circle at 50% -20%, 
-    rgba(59, 130, 246, 0.15), 
-    transparent 50%
-  );
+  /* Premium Mesh Gradient Background */
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(147, 51, 234, 0.08), transparent 25%),
+    radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.12), transparent 50%);
   background-attachment: fixed;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -36,27 +35,56 @@ body {
 
 /* Glassmorphism Utilities */
 .glass-panel {
-  background: var(--color-dark-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--color-dark-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  background: rgba(15, 15, 17, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .glass-card {
-  background: var(--color-dark-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--color-dark-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(24, 24, 27, 0.6) 0%, rgba(15, 15, 17, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  /* Inset shadow for depth, outer shadow for elevation */
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 4px 24px -4px rgba(0, 0, 0, 0.5);
+  border-radius: 1.25rem;
   padding: 1.5rem;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
 }
+
+/* Subtle glow effect on top border of the card */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  opacity: 0.5;
+  transition: opacity 0.4s ease;
+}
+
 .glass-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3), 0 0 20px rgba(59, 130, 246, 0.1);
+  transform: translateY(-4px) scale(1.01);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 12px 40px -8px rgba(0, 0, 0, 0.7), 0 0 30px rgba(59, 130, 246, 0.15);
+}
+
+.glass-card:hover::before {
+  opacity: 1;
+}
+
+/* Gradient Text Utilities */
+.text-gradient {
+  background: linear-gradient(to bottom right, #ffffff, #a1a1aa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 @keyframes fadeIn {

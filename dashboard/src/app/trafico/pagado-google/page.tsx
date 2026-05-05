@@ -337,7 +337,7 @@ export default function TraficoGoogleAdsPage() {
                     contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '0.75rem', color: '#fff' }}
                     itemStyle={{ color: '#fff' }}
                     labelFormatter={(label) => `Fecha: ${label}`}
-                    formatter={(value: any, name: string) => {
+                    formatter={(value: any, name: any) => {
                       if (name === 'cost') return [`$${Number(value).toFixed(2)}`, 'Gasto'];
                       return [formatNumber(Number(value)), name === 'clicks' ? 'Clics' : name];
                     }}

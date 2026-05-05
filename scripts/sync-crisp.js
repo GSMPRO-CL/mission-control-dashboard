@@ -3,6 +3,7 @@ const { BigQuery } = require('@google-cloud/bigquery');
 
 const DATASET_ID = 'ecommerce_data';
 const START_DATE_MS = new Date('2026-01-01T00:00:00Z').getTime();
+const MAX_EMPTY_PAGES = 5; // Si vemos 5 páginas seguidas sin tickets de 2026, detenemos
 
 async function fetchCrispConversations() {
   const identifier = process.env.CRISP_IDENTIFIER;
@@ -11,59 +12,76 @@ async function fetchCrispConversations() {
   const auth = Buffer.from(`${identifier}:${key}`).toString('base64');
   
   let allConversations = [];
+  let page = 1;
+  let emptyPagesCount = 0;
 
-  const filters = ['filter_not_resolved=1', 'filter_resolved=1'];
+  console.log("Extrayendo histórico de Crisp.chat desde 2026-01-01 (Sin Filtros)...");
 
-  console.log("Extrayendo histórico de Crisp.chat desde 2026-01-01...");
+  while (true) {
+    let res;
+    let retries = 5;
 
-  for (const filter of filters) {
-    let page = 1;
-    let keepFetching = true;
-    console.log(`\nAplicando filtro: ${filter}`);
-
-    while (keepFetching) {
-      const res = await fetch(`https://api.crisp.chat/v1/website/${websiteId}/conversations/${page}?${filter}`, {
+    // Manejo de Rate Limit
+    while (retries > 0) {
+      res = await fetch(`https://api.crisp.chat/v1/website/${websiteId}/conversations/${page}`, {
         headers: {
           'Authorization': `Basic ${auth}`,
           'X-Crisp-Tier': 'plugin'
         }
       });
 
-      if (!res.ok) {
-        if (res.status === 404) {
-          break;
-        }
-        throw new Error(`Crisp Error: ${res.statusText}`);
-      }
-
-      const json = await res.json();
-      const conversations = json.data;
-
-      if (!conversations || conversations.length === 0) {
-        break;
-      }
-
-      const validConversations = conversations.filter(c => c.created_at >= START_DATE_MS || c.updated_at >= START_DATE_MS);
-      
-      // Asegurarnos de no duplicar por seguridad, aunque sean disjoint sets
-      validConversations.forEach(vc => {
-        if (!allConversations.find(existing => existing.session_id === vc.session_id)) {
-          allConversations.push(vc);
-        }
-      });
-
-      process.stdout.write(`\rTotal acumulado: ${allConversations.length} conversaciones...`);
-
-      const oldestInPage = conversations[conversations.length - 1];
-      if (oldestInPage.updated_at < START_DATE_MS) {
-        keepFetching = false;
+      if (res.status === 429) {
+        process.stdout.write(`\n[Rate Limit 429] Esperando 5 segundos para reintentar... (Quedan ${retries-1} intentos)\n`);
+        await new Promise(r => setTimeout(r, 5000));
+        retries--;
       } else {
-        page++;
+        break; // Éxito o error distinto de 429
       }
     }
+
+    if (!res || !res.ok) {
+      if (res && res.status === 404) break; // No hay más páginas
+      throw new Error(`Crisp Error: ${res ? res.statusText : 'Fallaron los reintentos por 429'}`);
+    }
+
+    const json = await res.json();
+    const conversations = json.data;
+
+    if (!conversations || conversations.length === 0) {
+      break; // Fin de datos
+    }
+
+    // Filtramos las de 2026
+    const validConversations = conversations.filter(c => c.created_at >= START_DATE_MS || c.updated_at >= START_DATE_MS);
+    
+    // Si no hubo ninguna de 2026 en esta página, incrementamos el contador
+    if (validConversations.length === 0) {
+      emptyPagesCount++;
+    } else {
+      emptyPagesCount = 0; // Reset si encontramos algo útil
+    }
+
+    // Agregar sin duplicar
+    validConversations.forEach(vc => {
+      if (!allConversations.find(existing => existing.session_id === vc.session_id)) {
+        allConversations.push(vc);
+      }
+    });
+
+    process.stdout.write(`\rPág ${page} | Total acumulado de 2026: ${allConversations.length} conversaciones...`);
+
+    // Detener de forma segura
+    if (emptyPagesCount >= MAX_EMPTY_PAGES) {
+      console.log(`\n\nSe detectaron ${MAX_EMPTY_PAGES} páginas seguidas sin conversaciones de 2026. Deteniendo paginación de forma segura.`);
+      break;
+    }
+
+    page++;
+    // Pausa preventiva para no saturar la API (200ms)
+    await new Promise(r => setTimeout(r, 200));
   }
 
-  console.log(`\nExtracción completada. Total: ${allConversations.length} conversaciones del año 2026.`);
+  console.log(`\nExtracción completada. Total final: ${allConversations.length} conversaciones del año 2026.`);
   return allConversations;
 }
 
@@ -120,7 +138,6 @@ async function runSync() {
 
       return {
         session_id: c.session_id,
-        // Convertir milisegundos de Crisp a objeto Date para BigQuery
         created_at: bigquery.datetime(new Date(c.created_at).toISOString()),
         updated_at: bigquery.datetime(new Date(c.updated_at).toISOString()),
         status: c.state || c.status || 'unknown',
@@ -130,7 +147,7 @@ async function runSync() {
       };
     });
 
-    console.log("Insertando en BigQuery de forma masiva...");
+    console.log("\nInsertando en BigQuery de forma masiva...");
     
     const chunkSize = 500;
     for (let i = 0; i < bqRows.length; i += chunkSize) {

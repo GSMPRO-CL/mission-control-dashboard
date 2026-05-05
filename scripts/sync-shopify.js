@@ -128,13 +128,14 @@ async function runMerge(bq, stagingTableName, targetTableName, mergeType) {
       WHEN MATCHED THEN
         UPDATE SET 
           title = S.title,
+          vendor = S.vendor,
           quantity = S.quantity,
           price = S.price,
           product_id = S.product_id,
           variant_id = S.variant_id
       WHEN NOT MATCHED THEN
-        INSERT (id, order_id, product_id, variant_id, title, quantity, price)
-        VALUES (S.id, S.order_id, S.product_id, S.variant_id, S.title, S.quantity, S.price)
+        INSERT (id, order_id, product_id, variant_id, title, vendor, quantity, price)
+        VALUES (S.id, S.order_id, S.product_id, S.variant_id, S.title, S.vendor, S.quantity, S.price)
     `;
   }
 
@@ -181,6 +182,7 @@ async function runSync() {
           product_id: item.product_id || null,
           variant_id: item.variant_id || null,
           title: item.title,
+          vendor: item.vendor || null,
           quantity: item.quantity,
           price: parseFloat(item.price)
         });

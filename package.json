@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cd dashboard && npm run dev",
+    "dev:frontend": "cd dashboard && npm run dev",
+    "dev:ai": "cd services/product_intelligence && ./venv/bin/uvicorn main:app --reload --port 8000",
+    "dev:all": "concurrently \"npm run dev:frontend\" \"npm run dev:ai\" --kill-others --names \"NEXT,FASTAPI\" -c \"bgBlue.bold,bgGreen.bold\"",
+    "dev": "npm run dev:all",
     "build": "cd dashboard && npm run build",
     "start": "cd dashboard && npm start",
     "sync:shopify": "node scripts/sync-shopify.js",
@@ -13,7 +16,11 @@
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
+    "@google-cloud/language": "^7.2.1",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
