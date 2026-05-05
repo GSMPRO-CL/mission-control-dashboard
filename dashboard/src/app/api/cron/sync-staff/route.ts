@@ -1,12 +1,5 @@
 import { NextResponse } from 'next/server';
 import { BigQuery } from '@google-cloud/bigquery';
-import * as path from 'path';
-import * as dotenv from 'dotenv';
-
-// Load .env from parent directory if variables are missing
-if (!process.env.SHOPIFY_DOMAIN) {
-  dotenv.config({ path: path.join(process.cwd(), '../.env') });
-}
 
 // Configure BigQuery client
 const bq = new BigQuery({ projectId: process.env.GCP_PROJECT_ID });
