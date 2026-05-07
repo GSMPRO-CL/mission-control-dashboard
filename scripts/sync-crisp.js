@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({path: '../.env'});
 const { BigQuery } = require('@google-cloud/bigquery');
 
 const DATASET_ID = 'ecommerce_data';

@@ -1,5 +1,25 @@
 # Dashboard GSMPRO.CL
 
+## Arquitectura y Despliegue en Cloud Run
+
+El Dashboard opera sobre una arquitectura de **microservicios sin servidor** (Serverless) alojada en Google Cloud Run. Está compuesta por:
+1. **Frontend / Core Backend (Next.js):** Maneja la UI y las rutas API en `us-east1` (`dashboard-gsmpro-ui`).
+2. **Microservicio de IA (Python/FastAPI):** Procesa agentes de Vertex AI para inteligencia de mercado. Corre de forma privada e independiente.
+
+### Autenticación y Seguridad
+El microservicio de Python tiene **acceso público bloqueado (No allUsers)**. Para que Next.js se comunique con él, utiliza `google-auth-library` generando un "Identity Token" firmado por su cuenta de servicio en tiempo de ejecución. 
+
+### Política de Variables de Entorno (`env.yaml`)
+Para asegurar la inmutabilidad de los despliegues, las credenciales críticas **NUNCA** deben inyectarse directamente en consola con flags como `--set-env-vars`. En su lugar, todas las variables maestras residen en `env.yaml`. 
+El despliegue oficial hacia producción siempre se realiza con:
+```bash
+gcloud run deploy dashboard-gsmpro-ui \
+  --source . \
+  --region us-east1 \
+  --env-vars-file ../env.yaml \
+  --project atomic-box-494614-r5
+```
+
 ## Módulo de atribución — Setup
 
 Para configurar la base de datos necesaria para el módulo de atribución de actividad, sigue estos pasos:

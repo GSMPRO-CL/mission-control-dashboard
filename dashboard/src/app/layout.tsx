@@ -18,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="dark">
-      <body className={`${inter.className} antialiased min-h-screen flex selection:bg-blue-500/30 selection:text-blue-200`}>
+      <body suppressHydrationWarning className={`${inter.className} antialiased min-h-screen flex selection:bg-blue-500/30 selection:text-blue-200`}>
         <Sidebar />
         <div className="flex-1 ml-[288px] flex flex-col min-h-screen relative">
           <Header />

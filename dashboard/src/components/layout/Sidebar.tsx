@@ -17,7 +17,9 @@ import {
   Truck,
   Package,
   UserCheck,
-  Lightbulb
+  Lightbulb,
+  HeadphonesIcon,
+  Phone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,7 +63,14 @@ const navItems = [
       { name: 'Otros', href: '/marketing/otros' },
     ]
   },
-  { name: 'Customer Services', href: '/soporte', icon: MessageCircle },
+  { 
+    name: 'Servicio al Cliente', 
+    icon: HeadphonesIcon,
+    subItems: [
+      { name: 'Mensajería CRM (Crisp)', href: '/servicio-cliente/mensajeria' },
+      { name: 'Llamadas (RingCentral)', href: '/servicio-cliente/llamadas' },
+    ]
+  },
   { 
     name: 'Equipo', 
     icon: Users,

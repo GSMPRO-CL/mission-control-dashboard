@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({path: '../.env'});
 const { BigQuery } = require('@google-cloud/bigquery');
 const language = require('@google-cloud/language');
 const crypto = require('crypto');
@@ -16,6 +16,7 @@ async function setupBigQuery(bq) {
     { name: 'session_id', type: 'STRING' },
     { name: 'created_at', type: 'TIMESTAMP' },
     { name: 'sender_type', type: 'STRING' },
+    { name: 'operator_name', type: 'STRING' },
     { name: 'content', type: 'STRING' },
     { name: 'sentiment_score', type: 'FLOAT' },
     { name: 'sentiment_magnitude', type: 'FLOAT' }
@@ -107,6 +108,12 @@ async function runMessagesSync() {
 
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
         const sender = msg.from; // 'user', 'operator', etc.
+        
+        let operator_name = null;
+        if (sender === 'operator' && msg.user && msg.user.nickname) {
+          operator_name = msg.user.nickname;
+        }
+
         let sentiment_score = null;
         let sentiment_magnitude = null;
 
@@ -122,6 +129,7 @@ async function runMessagesSync() {
           session_id: session_id,
           created_at: bigquery.datetime(new Date(msg.timestamp).toISOString()),
           sender_type: sender,
+          operator_name: operator_name,
           content: content,
           sentiment_score: sentiment_score,
           sentiment_magnitude: sentiment_magnitude

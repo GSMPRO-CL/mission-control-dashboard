@@ -13,23 +13,24 @@ def check_products_in_bq(products: list) -> list:
         marca = product.get("marca", "")
         nombre = product.get("producto", "")
         
-        # Escapar comillas simples para evitar inyección SQL básica
-        marca_safe = marca.replace("'", "\\'")
-        nombre_safe = nombre.replace("'", "\\'")
-        
-        # Lógica de match: similitud en title y vendor
-        # Buscamos si la marca y el nombre están contenidos en el título o vendedor
         query = f"""
         SELECT id, title, vendor 
         FROM `{PROJECT_ID}.ecommerce_data.shopify_products`
         WHERE 
-            (LOWER(title) LIKE LOWER('%{nombre_safe}%') OR LOWER(title) LIKE LOWER('%{marca_safe}%'))
-            AND (LOWER(vendor) LIKE LOWER('%{marca_safe}%') OR LOWER('{marca_safe}') LIKE CONCAT('%', LOWER(vendor), '%'))
+            (LOWER(title) LIKE LOWER(CONCAT('%', @nombre, '%')) OR LOWER(title) LIKE LOWER(CONCAT('%', @marca, '%')))
+            AND (LOWER(vendor) LIKE LOWER(CONCAT('%', @marca, '%')) OR LOWER(@marca) LIKE CONCAT('%', LOWER(vendor), '%'))
         LIMIT 1
         """
         
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("nombre", "STRING", nombre),
+                bigquery.ScalarQueryParameter("marca", "STRING", marca),
+            ]
+        )
+        
         try:
-            query_job = client.query(query)
+            query_job = client.query(query, job_config=job_config)
             results = list(query_job.result())
             
             if results:
