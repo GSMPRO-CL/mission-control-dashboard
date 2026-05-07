@@ -1,34 +1,53 @@
 import { NextResponse } from 'next/server';
+import { BigQuery } from '@google-cloud/bigquery';
+import { GoogleAuth } from 'google-auth-library';
+
+const bq = new BigQuery({ projectId: process.env.GCP_PROJECT_ID });
 
 export async function GET() {
   try {
-    // URL del servicio Python (FastAPI). Por ahora en localhost, luego de despliegue se usa una env variable
-    const pythonServiceUrl = process.env.PYTHON_AI_SERVICE_URL || 'http://127.0.0.1:8000/api/v1/releases';
-    
-    console.log(`Llamando al servicio Python en: ${pythonServiceUrl}`);
-    const response = await fetch(pythonServiceUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // cache: 'no-store' // Para evitar que Next.js cachee si queremos resultados frescos siempre
-    });
+    const query = `
+      SELECT id, producto, marca, categoria, especificaciones_clave, fuente, estado_db, fecha_escaneo
+      FROM \`${process.env.GCP_PROJECT_ID}.raw_layer.market_intelligence_launches\`
+      ORDER BY fecha_escaneo DESC
+      LIMIT 200
+    `;
+    const [rows] = await bq.query(query);
+    return NextResponse.json({ status: 'success', data: rows });
+  } catch (error: any) {
+    console.error("Error fetching market intelligence data:", error);
+    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+  }
+}
 
-    if (!response.ok) {
-      console.error("Error desde el servicio Python", await response.text());
-      return NextResponse.json(
-        { error: 'Error comunicándose con el servicio de Inteligencia.' },
-        { status: response.status }
-      );
+export async function POST() {
+  try {
+    // Llama al microservicio en producción o localmente
+    const serviceUrl = process.env.PRODUCT_INTELLIGENCE_URL || 'http://localhost:8000';
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    // Si es Cloud Run (producción), inyectamos el Token IAM
+    if (serviceUrl.includes('run.app')) {
+      const auth = new GoogleAuth();
+      const client = await auth.getIdTokenClient(serviceUrl);
+      const authHeaders = await client.getRequestHeaders();
+      headers['Authorization'] = (authHeaders as any).Authorization || (authHeaders as any).authorization;
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const res = await fetch(`${serviceUrl}/api/v1/releases/scan`, {
+      method: 'POST',
+      headers: headers,
+      cache: 'no-store'
+    });
+    
+    if (!res.ok) {
+        throw new Error(`Microservice returned status ${res.status}`);
+    }
+    
+    const json = await res.json();
+    return NextResponse.json(json);
   } catch (error: any) {
-    console.error('Error in AI releases proxy:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor proxy.' },
-      { status: 500 }
-    );
+    console.error("Error triggering python service:", error);
+    return NextResponse.json({ error: 'Failed to trigger scan', details: error.message }, { status: 500 });
   }
 }

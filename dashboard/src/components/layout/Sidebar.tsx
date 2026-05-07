@@ -36,6 +36,10 @@ const navItems = [
     icon: Lightbulb,
     subItems: [
       { name: 'Lanzamientos de Productos', href: '/inteligencia-mercado/lanzamientos' },
+      { name: 'Dimensión de Mercado', href: '/inteligencia-mercado/dimension' },
+      { name: 'Competitividad', href: '/inteligencia-mercado/competitividad' },
+      { name: 'Tendencias', href: '/inteligencia-mercado/tendencias' },
+      { name: 'Posicionamiento Shopping', href: '/inteligencia-mercado/shopping-position' },
     ]
   },
   { 
