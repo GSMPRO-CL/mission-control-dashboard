@@ -28,3 +28,18 @@ To learn more about Next.js, take a look at the following resources:
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
 See the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for hosting options.
+
+---
+
+## Plataformas de Despliegue
+
+| Ambiente | Plataforma | Descripción |
+|----------|-----------|-------------|
+| **Producción** | Google Cloud Run | Entorno oficial. Deploy manual con Docker. |
+| **Staging** | Vercel | Para preview y desarrollo colaborativo. |
+
+> ⚠️ Vercel no es producción. La fuente de verdad siempre es Cloud Run (`atomic-box-494614-r5`).
+
+## Variables de Entorno Requeridas
+
+Copiar `.env.example` a `.env.local` para desarrollo local. Para producción, las variables se inyectan vía `env.yaml` en Cloud Run.

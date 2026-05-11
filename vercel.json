@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd dashboard && npm install",
-  "buildCommand": "cd dashboard && npm run build"
+  "buildCommand": "cd dashboard && npm run build",
+  "env": {
+    "NEXT_PUBLIC_ENVIRONMENT": "staging"
+  }
 }

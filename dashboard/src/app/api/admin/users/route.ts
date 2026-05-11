@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+
+// Admin client usando service_role — requiere SUPABASE_SERVICE_ROLE_KEY
+const getAdminClient = () => createAdminClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
 
 async function getCallerRole() {
   const cookieStore = await cookies()
@@ -20,7 +27,7 @@ export async function GET() {
   const role = await getCallerRole()
   if (role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const admin = createAdminClient()
+  const admin = getAdminClient()
   const { data, error } = await admin
     .from('profiles')
     .select('id, email, full_name, role, approval_status, created_at')
@@ -46,7 +53,7 @@ export async function PATCH(request: NextRequest) {
 
   if (!userId) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 
-  const admin = createAdminClient()
+  const admin = getAdminClient()
 
   if (action === 'set_role') {
     if (!['admin', 'user'].includes(newRole)) {

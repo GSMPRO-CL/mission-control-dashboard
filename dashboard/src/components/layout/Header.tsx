@@ -20,10 +20,12 @@ export function Header() {
         .single();
       if (profile?.role !== 'admin') return;
       setIsAdmin(true);
-      const res = await fetch('/api/admin/users');
+      // Endpoint optimizado: devuelve solo { count } con caché 60s
+      // en lugar de descargar todos los usuarios para filtrarlos en cliente
+      const res = await fetch('/api/admin/pending-count');
       if (res.ok) {
-        const users: { approval_status: string }[] = await res.json();
-        setPendingCount(users.filter(u => u.approval_status === 'pending').length);
+        const { count } = await res.json();
+        setPendingCount(count ?? 0);
       }
     });
   }, []);

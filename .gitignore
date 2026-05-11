@@ -5,3 +5,8 @@ node_modules/
 
 # Local working copies / secrets (never commit)
 Working Folder/
+
+# Herramientas de IA — si vuelven a dashboard/, ignorarlas (deben estar en docs/.agents/)
+dashboard/.agents/
+dashboard/.mcp.json
+dashboard/skills-lock.json

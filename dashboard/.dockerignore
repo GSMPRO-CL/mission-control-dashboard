@@ -3,5 +3,11 @@ Dockerfile
 node_modules
 npm-debug.log
 README.md
+CLAUDE.md
+AGENTS.md
 .next
 .git
+.env*
+debug-bq.js
+test-gads.js
+policy.yaml
