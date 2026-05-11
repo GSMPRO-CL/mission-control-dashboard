@@ -23,7 +23,8 @@ import {
 
 type SubItem = { name: string; href: string; adminOnly?: boolean };
 import { cn } from '@/lib/utils';
-import { createClient } from '@/utils/supabase/client';
+import { getUser, signOut as authSignOut } from '@/lib/auth';
+import type { AuthUser } from '@/lib/auth';
 
 const navItems = [
   { name: 'General', href: '/', icon: LayoutDashboard },
@@ -124,24 +125,17 @@ const navItems = [
   },
 ];
 
-type UserProfile = { email: string; full_name: string | null; role: string };
+
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('email, full_name, role')
-        .eq('id', user.id)
-        .single();
-      if (data) setProfile(data);
+    getUser().then((user) => {
+      if (user) setProfile(user);
     });
   }, []);
 
@@ -257,8 +251,7 @@ export function Sidebar() {
           </div>
           <button
             onClick={async () => {
-              const supabase = createClient();
-              await supabase.auth.signOut();
+              await authSignOut();
               router.push('/login');
             }}
             title="Cerrar sesión"

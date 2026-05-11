@@ -3,25 +3,17 @@
 import { useEffect, useState } from 'react';
 import { Bell, Search, RefreshCw, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/utils/supabase/client';
+import { getUser } from '@/lib/auth';
 
 export function Header() {
   const [isAdmin, setIsAdmin]           = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      if (profile?.role !== 'admin') return;
+    getUser().then(async (user) => {
+      if (!user || user.role !== 'admin') return;
       setIsAdmin(true);
       // Endpoint optimizado: devuelve solo { count } con caché 60s
-      // en lugar de descargar todos los usuarios para filtrarlos en cliente
       const res = await fetch('/api/admin/pending-count');
       if (res.ok) {
         const { count } = await res.json();
