@@ -1,90 +1,109 @@
-import { NextResponse } from 'next/server';
-import { bq, DATASET_ID } from '@/lib/bigquery';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+const SERPAPI = 'https://serpapi.com';
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const q         = (searchParams.get('q') || '').trim();
+  const ourPrice  = parseFloat(searchParams.get('our_price') || '0');
+  const country   = searchParams.get('country') || 'us';
+
+  if (!q) {
+    return NextResponse.json({ success: false, error: 'Query requerida (?q=producto)' }, { status: 400 });
+  }
+
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ success: false, error: 'SERPAPI_KEY no configurada' }, { status: 500 });
+  }
+
   try {
-    const projectId = process.env.GCP_PROJECT_ID;
-    const { searchParams } = new URL(request.url);
-    const vendorFilter = searchParams.get('vendor');
+    const shoppingUrl = new URL(`${SERPAPI}/search.json`);
+    shoppingUrl.searchParams.set('engine',  'google_shopping');
+    shoppingUrl.searchParams.set('q',       q);
+    shoppingUrl.searchParams.set('gl',      country);
+    shoppingUrl.searchParams.set('hl',      'es');
+    shoppingUrl.searchParams.set('api_key', apiKey);
 
-    // Construir filtro de vendor si se especifica
-    const vendorClause = vendorFilter
-      ? `AND vendor = @vendor`
-      : '';
+    const accountUrl = new URL(`${SERPAPI}/account.json`);
+    accountUrl.searchParams.set('api_key', apiKey);
 
-    const params: Record<string, string> = {};
-    if (vendorFilter) params.vendor = vendorFilter;
+    const [shoppingRes, accountRes] = await Promise.all([
+      fetch(shoppingUrl.toString(), { cache: 'no-store' }),
+      fetch(accountUrl.toString(),  { cache: 'no-store' }),
+    ]);
 
-    // Obtener la snapshot más reciente por producto+competidor
-    // (la última fecha de sync disponible)
-    const query = `
-      WITH latest_sync AS (
-        SELECT MAX(DATE(synced_at)) AS last_date
-        FROM \`${projectId}.${DATASET_ID}.competitor_prices\`
-      ),
-      latest_records AS (
-        SELECT cp.*
-        FROM \`${projectId}.${DATASET_ID}.competitor_prices\` cp
-        CROSS JOIN latest_sync
-        WHERE DATE(cp.synced_at) = latest_sync.last_date
-          ${vendorClause}
-      )
-      SELECT
-        product_id,
-        product_title,
-        vendor,
-        keyword_searched,
-        our_price,
-        competitor_name,
-        competitor_title,
-        competitor_price,
-        has_stock,
-        competitor_url,
-        thumbnail_url,
-        price_diff_amount,
-        price_diff_pct,
-        is_competitive,
-        data_source,
-        FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', synced_at) AS synced_at
-      FROM latest_records
-      ORDER BY product_title, price_diff_pct ASC
-    `;
+    const [shoppingJson, accountJson] = await Promise.all([
+      shoppingRes.json(),
+      accountRes.json(),
+    ]);
 
-    const [rows] = await bq.query({ query, params });
+    if (shoppingJson.error) {
+      return NextResponse.json({ success: false, error: shoppingJson.error }, { status: 400 });
+    }
 
-    // ── Calcular KPIs globales ────────────────────────────────────────────────
-    const uniqueProducts = new Set(rows.map((r: any) => r.product_id)).size;
-    const competitiveRows = rows.filter((r: any) => r.is_competitive);
-    const inStockCompetitors = rows.filter((r: any) => r.has_stock).length;
-    const outOfStockCompetitors = rows.filter((r: any) => !r.has_stock).length;
+    const raw: any[] = shoppingJson.shopping_results ?? [];
 
-    // % de comparaciones donde somos competitivos
-    const competitivenessRate = rows.length > 0
-      ? Math.round((competitiveRows.length / rows.length) * 100)
-      : 0;
+    const competitors = raw.slice(0, 20).map((item: any) => {
+      const competitorPrice: number = item.extracted_price ?? 0;
+      const diffAmount = ourPrice > 0 ? competitorPrice - ourPrice : null;
+      const diffPct    = ourPrice > 0 && competitorPrice > 0
+        ? Math.round(((competitorPrice - ourPrice) / ourPrice) * 1000) / 10
+        : null;
 
-    // Promedio de diferencia de precio
-    const avgPriceDiffPct = rows.length > 0
-      ? Math.round(rows.reduce((s: number, r: any) => s + (r.price_diff_pct || 0), 0) / rows.length * 10) / 10
-      : 0;
+      return {
+        title:           item.title          ?? '—',
+        source:          item.source         ?? '—',
+        price:           item.price          ?? '—',
+        extractedPrice:  competitorPrice,
+        thumbnail:       item.thumbnail      ?? null,
+        link:            item.link           ?? null,
+        rating:          item.rating         ?? null,
+        reviews:         item.reviews        ?? null,
+        delivery:        item.delivery       ?? null,
+        condition:       item.second_hand_condition ?? 'Nuevo',
+        diffAmount,
+        diffPct,
+        isCompetitive:   ourPrice > 0 && competitorPrice > 0 ? ourPrice <= competitorPrice : null,
+      };
+    });
+
+    const pricesWithOurs = competitors
+      .filter(c => c.extractedPrice > 0 && ourPrice > 0)
+      .map(c => c.extractedPrice);
+
+    const lowestCompetitor  = pricesWithOurs.length > 0 ? Math.min(...pricesWithOurs) : null;
+    const highestCompetitor = pricesWithOurs.length > 0 ? Math.max(...pricesWithOurs) : null;
+    const avgCompetitor     = pricesWithOurs.length > 0
+      ? Math.round(pricesWithOurs.reduce((s, p) => s + p, 0) / pricesWithOurs.length * 100) / 100
+      : null;
+
+    const competitiveCount = competitors.filter(c => c.isCompetitive === true).length;
+    const competitivenessRate = competitors.filter(c => c.isCompetitive !== null).length > 0
+      ? Math.round((competitiveCount / competitors.filter(c => c.isCompetitive !== null).length) * 100)
+      : null;
 
     return NextResponse.json({
       success: true,
       data: {
+        query: q,
+        ourPrice: ourPrice > 0 ? ourPrice : null,
+        competitors,
         summary: {
-          totalComparisons:    rows.length,
-          uniqueProducts,
+          total:              competitors.length,
+          lowestCompetitor,
+          highestCompetitor,
+          avgCompetitor,
           competitivenessRate,
-          avgPriceDiffPct,
-          inStockCompetitors,
-          outOfStockCompetitors,
-          lastSync: rows[0]?.synced_at ?? null,
         },
-        competitors: rows,
+        rateLimit: {
+          searchesLeft: accountJson.total_searches_left ?? null,
+          planName:     accountJson.plan_name           ?? 'Unknown',
+        },
+        fetchedAt: new Date().toISOString(),
       },
     });
-  } catch (error: any) {
-    console.error('API Competitividad Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

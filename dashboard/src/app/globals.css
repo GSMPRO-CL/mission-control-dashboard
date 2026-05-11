@@ -15,6 +15,10 @@
   --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+html {
+  font-size: 90%; /* scales all rem-based sizes proportionally */
+}
+
 :root {
   --background: #050505; /* Deeper OLED black */
   --foreground: #fafafa;

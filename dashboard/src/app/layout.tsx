@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
+import { LayoutShell } from "@/components/layout/LayoutShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,13 +18,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body suppressHydrationWarning className={`${inter.className} antialiased min-h-screen flex selection:bg-blue-500/30 selection:text-blue-200`}>
-        <Sidebar />
-        <div className="flex-1 ml-[288px] flex flex-col min-h-screen relative">
-          <Header />
-          <main className="flex-1 p-6 lg:p-8 pt-4">
-            {children}
-          </main>
-        </div>
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );

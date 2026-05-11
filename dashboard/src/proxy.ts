@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/middleware'
 
 const PUBLIC_PATHS = ['/login', '/signup', '/pending']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { supabase, supabaseResponse } = createClient(request)
   const { pathname } = request.nextUrl
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p))
@@ -29,6 +29,10 @@ export async function middleware(request: NextRequest) {
 
     if (profile?.approval_status === 'rejected') {
       return NextResponse.redirect(new URL('/login?error=rejected', request.url))
+    }
+
+    if (pathname.startsWith('/admin') && profile?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url))
     }
   }
 

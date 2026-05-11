@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  BarChart3, 
-  MessageCircle, 
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  BarChart3,
   Settings,
   Users,
   Globe,
@@ -19,9 +18,12 @@ import {
   UserCheck,
   Lightbulb,
   HeadphonesIcon,
-  Phone
+  LogOut,
 } from 'lucide-react';
+
+type SubItem = { name: string; href: string; adminOnly?: boolean };
 import { cn } from '@/lib/utils';
+import { createClient } from '@/utils/supabase/client';
 
 const navItems = [
   { name: 'General', href: '/', icon: LayoutDashboard },
@@ -33,15 +35,16 @@ const navItems = [
       { name: 'Análisis de Productos', href: '/ventas/productos' },
     ]
   },
-  { 
-    name: 'Inteligencia de Mercado', 
+  {
+    name: 'Inteligencia de Mercado',
     icon: Lightbulb,
     subItems: [
-      { name: 'Lanzamientos de Productos', href: '/inteligencia-mercado/lanzamientos' },
-      { name: 'Dimensión de Mercado', href: '/inteligencia-mercado/dimension' },
+      { name: 'Resumen', href: '/inteligencia-mercado' },
+      { name: 'Tendencias', href: '/inteligencia-mercado/trends' },
       { name: 'Competitividad', href: '/inteligencia-mercado/competitividad' },
-      { name: 'Tendencias', href: '/inteligencia-mercado/tendencias' },
+      { name: 'Dimensión de Mercado', href: '/inteligencia-mercado/dimension' },
       { name: 'Posicionamiento Shopping', href: '/inteligencia-mercado/shopping-position' },
+      { name: 'Lanzamientos', href: '/inteligencia-mercado/lanzamientos' },
     ]
   },
   { 
@@ -111,29 +114,52 @@ const navItems = [
       { name: 'Segmentación', href: '/clientes/segmentacion' },
     ]
   },
-  { name: 'Configuración', href: '/configuracion', icon: Settings },
+  {
+    name: 'Configuración',
+    icon: Settings,
+    subItems: [
+      { name: 'Preferencias', href: '/settings' },
+      { name: 'Usuarios y Accesos', href: '/admin', adminOnly: true },
+    ] as SubItem[],
+  },
 ];
+
+type UserProfile = { email: string; full_name: string | null; role: string };
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('email, full_name, role')
+        .eq('id', user.id)
+        .single();
+      if (data) setProfile(data);
+    });
+  }, []);
 
   // Auto-expand parent if a child is active
   useEffect(() => {
     const newExpanded = { ...expandedItems };
     let hasChanges = false;
     navItems.forEach(item => {
-      if (item.subItems && item.subItems.some(sub => pathname.startsWith(sub.href))) {
+      const visible = item.subItems?.filter(sub => !sub.adminOnly || profile?.role === 'admin') ?? [];
+      if (visible.some(sub => pathname.startsWith(sub.href))) {
         if (!newExpanded[item.name]) {
           newExpanded[item.name] = true;
           hasChanges = true;
         }
       }
     });
-    if (hasChanges) {
-      setExpandedItems(newExpanded);
-    }
-  }, [pathname]);
+    if (hasChanges) setExpandedItems(newExpanded);
+  }, [pathname, profile]);
 
   const toggleExpand = (name: string) => {
     setExpandedItems(prev => ({ ...prev, [name]: !prev[name] }));
@@ -153,7 +179,11 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {navItems.map((item) => {
           const hasSubItems = !!item.subItems;
-          const isActive = pathname === item.href || (hasSubItems && item.subItems!.some(sub => pathname === sub.href));
+          const visibleSubItems = hasSubItems
+            ? item.subItems!.filter(sub => !sub.adminOnly || profile?.role === 'admin')
+            : [];
+          if (hasSubItems && visibleSubItems.length === 0) return null;
+          const isActive = pathname === item.href || (hasSubItems && visibleSubItems.some(sub => pathname === sub.href));
           const isExpanded = expandedItems[item.name];
 
           return (
@@ -195,7 +225,7 @@ export function Sidebar() {
               {/* Sub-items list */}
               {hasSubItems && isExpanded && (
                 <div className="mt-1 mb-2 ml-4 pl-4 border-l border-white/10 space-y-1 overflow-hidden transition-all duration-300">
-                  {item.subItems!.map((sub) => (
+                  {visibleSubItems.map((sub) => (
                     <Link
                       key={sub.name}
                       href={sub.href}
@@ -216,15 +246,26 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 mt-auto">
-        <div className="relative overflow-hidden group p-4 rounded-2xl flex items-center gap-3 border border-white/5 bg-white/5 hover:bg-white/10 transition-colors cursor-pointer">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
-            A
+      <div className="p-4 mt-auto space-y-2">
+        <div className="relative overflow-hidden group p-4 rounded-2xl flex items-center gap-3 border border-white/5 bg-white/5">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-500/30 shrink-0">
+            {(profile?.full_name?.[0] ?? profile?.email?.[0] ?? 'U').toUpperCase()}
           </div>
-          <div className="z-10">
-            <p className="text-sm font-semibold text-white">Admin</p>
-            <p className="text-xs text-zinc-400">admin@gsmpro.cl</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white truncate">{profile?.full_name ?? 'Usuario'}</p>
+            <p className="text-xs text-zinc-400 truncate">{profile?.email ?? ''}</p>
           </div>
+          <button
+            onClick={async () => {
+              const supabase = createClient();
+              await supabase.auth.signOut();
+              router.push('/login');
+            }}
+            title="Cerrar sesión"
+            className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>

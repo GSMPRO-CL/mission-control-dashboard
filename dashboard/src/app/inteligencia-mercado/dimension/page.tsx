@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Globe, TrendingUp, ShoppingBag, BarChart2, RefreshCw } from 'lucide-react';
+import { Globe, TrendingUp, ShoppingBag, BarChart2, RefreshCw, Clock, Search, Calculator, AlertTriangle } from 'lucide-react';
 import {
   Treemap,
   ResponsiveContainer,
@@ -174,16 +174,7 @@ export default function DimensionMercadoPage() {
 
       {/* Chart Section */}
       {noData ? (
-        <div className="p-12 rounded-3xl border border-white/10 bg-zinc-950/50 text-center">
-          <Globe className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-          <h3 className="text-white font-semibold text-lg mb-2">Sin datos de mercado todavía</h3>
-          <p className="text-zinc-400 text-sm max-w-md mx-auto">
-            Ejecuta el sincronizador para poblar los datos:
-          </p>
-          <code className="block mt-3 text-xs text-blue-400 bg-zinc-900 rounded-lg px-4 py-2 inline-block">
-            cd scripts && node sync-market-size.js
-          </code>
-        </div>
+        <PendingState />
       ) : (
         <>
           {/* View Toggle + Chart */}
@@ -307,6 +298,135 @@ export default function DimensionMercadoPage() {
         </>
       )}
 
+    </div>
+  );
+}
+
+// ─── Pending State Component ──────────────────────────────────────────────────
+
+function PendingState() {
+  const [keyword, setKeyword]     = useState('');
+  const [price, setPrice]         = useState('');
+  const [searches, setSearches]   = useState('');
+  const [preview, setPreview]     = useState<{ marketSize: number; marketShare: number; buyers: number } | null>(null);
+
+  const calculate = (e: React.FormEvent) => {
+    e.preventDefault();
+    const vol = parseFloat(searches);
+    const prc = parseFloat(price);
+    if (!vol || !prc) return;
+    const buyers     = vol * 0.01;
+    const marketSize = buyers * prc;
+    const marketShare = marketSize * 0.05;
+    setPreview({ marketSize, marketShare, buyers });
+  };
+
+  const fmtCurrency = (n: number) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+
+  return (
+    <div className="space-y-6">
+      {/* Status banner */}
+      <div className="flex items-start gap-4 p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5">
+        <div className="p-2 rounded-xl bg-amber-500/10 flex-shrink-0">
+          <Clock className="w-5 h-5 text-amber-400" />
+        </div>
+        <div>
+          <p className="text-amber-400 font-semibold">Esperando Google Ads Basic Access</p>
+          <p className="text-zinc-400 text-sm mt-1">
+            El servicio <code className="text-xs bg-zinc-900 px-1.5 py-0.5 rounded text-blue-300">KeywordPlanIdeaService</code> requiere aprobación de Basic Access.
+            Puedes usar la calculadora abajo para estimar el mercado manualmente mientras tanto.
+          </p>
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <span className="text-[10px] font-medium px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              Solicitado en ads.google.com
+            </span>
+            <span className="text-[10px] text-zinc-600">1-5 días hábiles · El token nuevo llegará por email</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Formula explainer */}
+      <div className="p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl">
+        <h2 className="text-lg font-bold text-white mb-1">Cómo se calcula el Market Size</h2>
+        <p className="text-zinc-500 text-sm mb-5">La fórmula que usará este módulo cuando Google Ads esté activo:</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          {[
+            { step: '1', label: 'Compradores potenciales', formula: 'Búsquedas/mes × 1%', color: 'blue' },
+            { step: '2', label: 'Market Size',             formula: 'Compradores × Precio promedio', color: 'violet' },
+            { step: '3', label: 'Market Share estimado',   formula: 'Market Size × 5%', color: 'emerald' },
+          ].map(item => (
+            <div key={item.step} className="p-4 rounded-2xl border border-white/5 bg-zinc-900/40">
+              <span className="text-[10px] font-mono text-zinc-600">PASO {item.step}</span>
+              <p className="text-white font-semibold mt-1">{item.label}</p>
+              <p className="text-xs font-mono text-zinc-400 mt-1">{item.formula}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Manual calculator */}
+      <div className="p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl">
+        <div className="flex items-center gap-2 mb-5">
+          <Calculator className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-white">Calculadora Manual</h2>
+        </div>
+        <form onSubmit={calculate} className="flex flex-col md:flex-row gap-3 mb-5">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="text"
+              value={keyword}
+              onChange={e => setKeyword(e.target.value)}
+              placeholder='Keyword (ej. "iPhone 15 case")'
+              className="w-full bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
+            />
+          </div>
+          <input
+            type="number"
+            value={searches}
+            onChange={e => setSearches(e.target.value)}
+            placeholder="Búsquedas/mes"
+            className="w-full md:w-44 bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
+          />
+          <input
+            type="number"
+            value={price}
+            onChange={e => setPrice(e.target.value)}
+            placeholder="Precio USD"
+            className="w-full md:w-36 bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
+          />
+          <button
+            type="submit"
+            disabled={!searches || !price}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap"
+          >
+            <Calculator className="w-4 h-4" />
+            Calcular
+          </button>
+        </form>
+
+        {preview && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 text-center">
+              <p className="text-xs text-zinc-500 mb-1">Compradores Potenciales</p>
+              <p className="text-2xl font-bold text-white">{preview.buyers.toLocaleString('es-CL', { maximumFractionDigits: 0 })}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">personas/mes</p>
+            </div>
+            <div className="p-4 rounded-2xl border border-violet-500/20 bg-violet-500/5 text-center">
+              <p className="text-xs text-zinc-500 mb-1">Market Size Estimado</p>
+              <p className="text-2xl font-bold text-white">{fmtCurrency(preview.marketSize)}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">tamaño del mercado</p>
+            </div>
+            <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-center">
+              <p className="text-xs text-zinc-500 mb-1">Market Share Estimado</p>
+              <p className="text-2xl font-bold text-white">{fmtCurrency(preview.marketShare)}</p>
+              <p className="text-[10px] text-zinc-600 mt-1">nuestra cuota (5%)</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
