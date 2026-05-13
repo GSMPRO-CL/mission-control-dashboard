@@ -7,14 +7,16 @@ WITH UserFirstMessage AS (
   WHERE sender_type = 'user'
   GROUP BY session_id
 ),
-OperatorFirstMessage AS (
+OperatorFirstResponse AS (
   SELECT 
-    session_id, 
-    MIN(created_at) as first_operator_msg_at,
-    MAX(operator_name) as primary_operator -- Asumimos que el principal responde la primera vez o más
-  FROM `atomic-box-494614-r5.ecommerce_data.crisp_messages`
-  WHERE sender_type = 'operator'
-  GROUP BY session_id
+    m.session_id, 
+    MIN(m.created_at) as first_operator_msg_at,
+    MAX(m.operator_name) as primary_operator -- Asumimos que el principal responde la primera vez o más
+  FROM `atomic-box-494614-r5.ecommerce_data.crisp_messages` m
+  JOIN UserFirstMessage u ON m.session_id = u.session_id
+  WHERE m.sender_type = 'operator' 
+    AND m.created_at >= u.first_user_msg_at
+  GROUP BY m.session_id
 )
 SELECT 
   c.session_id,
@@ -29,4 +31,4 @@ SELECT
   TIMESTAMP_DIFF(o.first_operator_msg_at, u.first_user_msg_at, MINUTE) as ttfr_minutes
 FROM `atomic-box-494614-r5.ecommerce_data.crisp_conversations` c
 LEFT JOIN UserFirstMessage u ON c.session_id = u.session_id
-LEFT JOIN OperatorFirstMessage o ON c.session_id = o.session_id;
+LEFT JOIN OperatorFirstResponse o ON c.session_id = o.session_id;

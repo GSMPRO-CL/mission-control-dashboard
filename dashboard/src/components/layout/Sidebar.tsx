@@ -22,11 +22,13 @@ import {
 } from 'lucide-react';
 
 type SubItem = { name: string; href: string; adminOnly?: boolean };
+type NavItem = { name: string; icon: any; href?: string; subItems?: SubItem[] };
+
 import { cn } from '@/lib/utils';
 import { getUser, signOut as authSignOut } from '@/lib/auth';
 import type { AuthUser } from '@/lib/auth';
 
-const navItems = [
+const navItems: NavItem[] = [
   { name: 'General', href: '/', icon: LayoutDashboard },
   { 
     name: 'Ventas', 
@@ -62,9 +64,10 @@ const navItems = [
     name: 'Marketing', 
     icon: BarChart3,
     subItems: [
-      { name: 'Email', href: '/marketing/email' },
-      { name: 'Ads', href: '/marketing/ads' },
-      { name: 'Otros', href: '/marketing/otros' },
+      { name: 'Resumen', href: '/marketing' },
+      { name: 'Email (Klaviyo)', href: '/marketing/email' },
+      { name: 'Reseñas (Yotpo)', href: '/marketing/reviews' },
+      { name: 'Ads (Próximamente)', href: '/marketing/ads' },
     ]
   },
   { 
@@ -114,14 +117,6 @@ const navItems = [
       { name: 'Retención (LTV)', href: '/clientes/retencion' },
       { name: 'Segmentación', href: '/clientes/segmentacion' },
     ]
-  },
-  {
-    name: 'Configuración',
-    icon: Settings,
-    subItems: [
-      { name: 'Preferencias', href: '/settings' },
-      { name: 'Usuarios y Accesos', href: '/admin', adminOnly: true },
-    ] as SubItem[],
   },
 ];
 
@@ -252,7 +247,6 @@ export function Sidebar() {
           <button
             onClick={async () => {
               await authSignOut();
-              router.push('/login');
             }}
             title="Cerrar sesión"
             className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"

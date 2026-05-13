@@ -10,3 +10,7 @@ Working Folder/
 dashboard/.agents/
 dashboard/.mcp.json
 dashboard/skills-lock.json
+
+# Secrets
+google_analytics.json
+

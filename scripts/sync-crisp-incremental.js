@@ -9,7 +9,7 @@
  *   node scripts/sync-crisp-incremental.js
  *   node scripts/sync-crisp-incremental.js --full   (fuerza sincronización completa desde 2026-01-01)
  */
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { BigQuery } = require('@google-cloud/bigquery');
 
 const DATASET_ID    = 'ecommerce_data';
@@ -47,11 +47,20 @@ function buildRow(c, bigquery) {
     rating_value   = c.meta.rating.value   ?? null;
     rating_comment = c.meta.rating.comment ?? null;
   }
+
+  // Crisp API sometimes returns state as string, or status as integer (0: pending, 1: unresolved, 2: resolved)
+  let statusStr = c.state;
+  if (!statusStr && c.status !== undefined) {
+    if (c.status === 2) statusStr = 'resolved';
+    else if (c.status === 1) statusStr = 'unresolved';
+    else if (c.status === 0) statusStr = 'pending';
+  }
+
   return {
     session_id:     c.session_id,
     created_at:     bigquery.timestamp(new Date(c.created_at)),
     updated_at:     bigquery.timestamp(new Date(c.updated_at)),
-    status:         c.state || c.status || 'unknown',
+    status:         statusStr || 'unknown',
     segments:       c.meta?.segments?.join(',') ?? '',
     rating_value,
     rating_comment,

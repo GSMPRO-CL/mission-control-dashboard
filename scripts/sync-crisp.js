@@ -1,4 +1,4 @@
-require('dotenv').config({path: '../.env'});
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { BigQuery } = require('@google-cloud/bigquery');
 
 const DATASET_ID = 'ecommerce_data';
@@ -11,15 +11,29 @@ async function fetchCrispConversations() {
   const websiteId = process.env.CRISP_WEBSITE_ID;
   const auth = Buffer.from(`${identifier}:${key}`).toString('base64');
   
+  const args = process.argv.slice(2);
+  let startPage = 1;
+  let endPage = Infinity;
+  
+  args.forEach((arg, index) => {
+    if (arg === '--start-page' && args[index + 1]) startPage = parseInt(args[index + 1]);
+    if (arg === '--end-page' && args[index + 1]) endPage = parseInt(args[index + 1]);
+  });
+
   let allConversations = [];
-  let page = 1;
+  let page = startPage;
   let emptyPagesCount = 0;
 
-  console.log("Extrayendo histórico de Crisp.chat desde 2026-01-01 (Sin Filtros)...");
+  console.log(`Extrayendo histórico de Crisp.chat desde 2026-01-01 (Tramo: Págs ${startPage} a ${endPage === Infinity ? 'Final' : endPage})...`);
 
   while (true) {
+    if (page > endPage) {
+      console.log(`\nAlcanzado el fin del tramo programado (Página ${endPage}). Deteniendo extracción.`);
+      break;
+    }
     let res;
-    let retries = 5;
+    let retries = 20; // Aumentar cantidad de reintentos
+    let delay = 5000; // Demora base
 
     // Manejo de Rate Limit
     while (retries > 0) {
@@ -31,8 +45,18 @@ async function fetchCrispConversations() {
       });
 
       if (res.status === 429) {
-        process.stdout.write(`\n[Rate Limit 429] Esperando 5 segundos para reintentar... (Quedan ${retries-1} intentos)\n`);
-        await new Promise(r => setTimeout(r, 5000));
+        let waitTime = delay;
+        const retryAfter = res.headers.get('retry-after');
+        if (retryAfter) {
+           waitTime = parseInt(retryAfter) * 1000;
+        }
+
+        process.stdout.write(`\n[Rate Limit 429] Esperando ${waitTime/1000} segundos para reintentar... (Quedan ${retries-1} intentos)\n`);
+        await new Promise(r => setTimeout(r, waitTime));
+        
+        // Exponential backoff si no hay cabecera explícita
+        if (!retryAfter) delay *= 2; 
+        
         retries--;
       } else {
         break; // Éxito o error distinto de 429
@@ -41,7 +65,7 @@ async function fetchCrispConversations() {
 
     if (!res || !res.ok) {
       if (res && res.status === 404) break; // No hay más páginas
-      throw new Error(`Crisp Error: ${res ? res.statusText : 'Fallaron los reintentos por 429'}`);
+      throw new Error(`Crisp Error: ${res ? res.status + ' ' + res.statusText : 'Fallaron los reintentos por 429'}`);
     }
 
     const json = await res.json();
@@ -136,11 +160,18 @@ async function runSync() {
         rating_com = c.meta.rating.comment || null;
       }
 
+      let statusStr = c.state;
+      if (!statusStr && c.status !== undefined) {
+        if (c.status === 2) statusStr = 'resolved';
+        else if (c.status === 1) statusStr = 'unresolved';
+        else if (c.status === 0) statusStr = 'pending';
+      }
+
       return {
         session_id: c.session_id,
         created_at: bigquery.datetime(new Date(c.created_at).toISOString()),
         updated_at: bigquery.datetime(new Date(c.updated_at).toISOString()),
-        status: c.state || c.status || 'unknown',
+        status: statusStr || 'unknown',
         segments: (c.meta && c.meta.segments) ? c.meta.segments.join(',') : '',
         rating_value: rating_val,
         rating_comment: rating_com

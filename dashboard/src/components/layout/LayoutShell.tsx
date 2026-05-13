@@ -4,15 +4,8 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
-const AUTH_PATHS = ['/login', '/signup', '/pending'];
-
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthPage = AUTH_PATHS.some(p => pathname.startsWith(p));
-
-  if (isAuthPage) {
-    return <>{children}</>;
-  }
 
   return (
     <>
