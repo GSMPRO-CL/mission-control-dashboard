@@ -3,6 +3,16 @@
 Este documento mantiene un registro inmutable de las decisiones técnicas, configuraciones y módulos desarrollados para el Dashboard GSMPRO. 
 *Sirve como memoria principal para cualquier sesión futura del agente.*
 
+## [12-05-2026] - Analítica Avanzada del Módulo Equipo
+- **Selector de Empleados (Staff Filter):** Se implementó un dropdown server-side que consulta `shopify_staff` para filtrar la actividad por colaborador, reemplazando el filtro local estático por una re-consulta paramétrica al API (`?staffIds=`).
+- **Selector de Rango de Fechas (Date Range Filter):** Se añadió un componente `DateRangeFilter` que permite acotar el análisis a un periodo específico; por defecto calcula MTD (Month-To-Date). Los parámetros `startDate` y `endDate` se validan y propagan a las 6 queries del backend.
+- **Gráfica de Series de Tiempo (Time Series):** Se construyó el componente `TimeSeriesChart` alimentado por una nueva query (`queryTimeSeries`) que agrupa eventos por fecha y empleado, permitiendo visualizar tendencias de actividad diaria con líneas diferenciadas por colaborador.
+- **Paginación del Historial de Eventos:** La tabla de eventos pasó de un `LIMIT 100` fijo a paginación server-side completa con `LIMIT @limit OFFSET @offset`, incluyendo un componente `PaginatedTable` con controles de página y registros por página configurables.
+- **Gráfico de Barras Horizontal:** Se rediseñó el BarChart de orientación vertical (con nombres rotados a 45°) a layout horizontal con nombres legibles en el eje Y (`width: 140px`), scroll vertical con custom scrollbar y skeleton de carga.
+- **Vista BigQuery Consolidada:** Se migraron las queries de JOINs manuales (`shopify_audit_log ⨝ shopify_staff`) a la vista `v_audit_log_enriched`, simplificando el mantenimiento y centralizando la lógica de enriquecimiento.
+- **Ejecución Paralela de Queries:** Las 6 queries del endpoint se ejecutan en paralelo con `Promise.all()` usando una instancia singleton de BigQuery (`@/lib/bigquery`), optimizando la latencia de respuesta.
+- **Custom Scrollbar (CSS):** Se añadieron estilos WebKit en `globals.css` (`.custom-scrollbar`) con thumb translúcido (`slate-600/50`) y hover state, aplicados al BarChart y la lista de Top Acciones.
+
 ## [05-05-2026] - Producción y Módulo de Customer Services (Soporte)
 - **Extracción de SLA:** Se actualizó el pipeline Node.js (`sync-crisp-messages`) para capturar la identidad de los operadores, y se consolidó el BigQuery con una vista SQL (`v_crisp_sla`) que delega el cálculo matemático del TTFR.
 - **Sentiment Analysis:** Rutas de API `/api/support/sentiment` implementadas nativamente contra el motor NLP de Google.
