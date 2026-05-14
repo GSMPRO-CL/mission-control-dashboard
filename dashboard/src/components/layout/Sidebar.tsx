@@ -68,6 +68,7 @@ const navItems: NavItem[] = [
       { name: 'Email (Klaviyo)', href: '/marketing/email' },
       { name: 'Reseñas (Yotpo)', href: '/marketing/reviews' },
       { name: 'Ads (Próximamente)', href: '/marketing/ads' },
+      { name: 'Calendario Comercial', href: '/marketing/calendar' },
     ]
   },
   { 

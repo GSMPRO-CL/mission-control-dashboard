@@ -33,7 +33,8 @@ La estructura de cada objeto debe ser la siguiente:
     "marca": "Marca",
     "categoria": "Celular / Consola / Laptop / VR / Tablet",
     "especificaciones_clave": "Especificaciones clave (procesador, pantalla, precio estimado) y una breve descripción de su innovación principal.",
-    "fuente": "URL de la noticia o fuente"
+    "fuente": "URL de la noticia o fuente",
+    "fecha_lanzamiento": "YYYY-MM-DD"
   }
 ]
 """

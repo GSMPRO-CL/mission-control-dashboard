@@ -6,5 +6,6 @@ CREATE TABLE IF NOT EXISTS `atomic-box-494614-r5.raw_layer.market_intelligence_l
   especificaciones_clave STRING,
   fuente STRING,
   estado_db STRING,
-  fecha_escaneo TIMESTAMP
+  fecha_escaneo TIMESTAMP,
+  fecha_lanzamiento DATE
 );

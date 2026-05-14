@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { BarChart3, Mail, Star, Search, Megaphone, ArrowRight } from "lucide-react";
+import { BarChart3, Mail, Star, Search, Megaphone, ArrowRight, CalendarDays } from "lucide-react";
 import { motion, Variants } from 'framer-motion';
 
 const containerVariants: Variants = {
@@ -43,6 +43,13 @@ export default function MarketingOverviewPage() {
       icon: Megaphone,
       href: '/marketing/ads',
       color: 'blue'
+    },
+    {
+      title: 'Calendario Comercial',
+      description: 'Eventos comerciales importantes y próximos lanzamientos de productos (Potenciado por AI).',
+      icon: CalendarDays,
+      href: '/marketing/calendar',
+      color: 'emerald'
     }
   ];
 
@@ -50,7 +57,8 @@ export default function MarketingOverviewPage() {
     rose: 'bg-rose-500/10 border-rose-500/20 text-rose-400 group-hover:bg-rose-500/20',
     amber: 'bg-amber-500/10 border-amber-500/20 text-amber-400 group-hover:bg-amber-500/20',
     indigo: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/20',
-    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-500/20'
+    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400 group-hover:bg-blue-500/20',
+    emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20'
   };
 
   return (

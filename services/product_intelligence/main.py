@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from agent import get_latest_electronic_releases
+from calendar_agent import get_upcoming_commercial_calendar_events
 from bq_matcher import check_products_in_bq
 from dotenv import load_dotenv
 
@@ -56,7 +57,8 @@ def run_scan():
                 "especificaciones_clave": p.get("especificaciones_clave", ""),
                 "fuente": p.get("fuente", ""),
                 "estado_db": p.get("estado_db", ""),
-                "fecha_escaneo": scan_time
+                "fecha_escaneo": scan_time,
+                "fecha_lanzamiento": p.get("fecha_lanzamiento", None)
             })
             
         errors = bq_client.insert_rows_json(
@@ -73,6 +75,57 @@ def run_scan():
     except Exception as e:
         print(f"Error en el flujo principal: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor procesando lanzamientos.")
+
+@app.post("/api/v1/calendar/scan")
+def run_calendar_scan():
+    try:
+        # 1. Obtener historial de eventos para optimizar tokens y evitar duplicados
+        query = f"SELECT DISTINCT event_name FROM `{PROJECT_ID}.raw_layer.commercial_calendar` WHERE event_date >= CURRENT_DATE()"
+        query_job = bq_client.query(query)
+        known_events = [row.event_name for row in query_job.result()]
+        
+        # 2. Obtener los próximos eventos vía Gemini
+        raw_events = get_upcoming_commercial_calendar_events(known_events)
+        
+        if not raw_events:
+            return {"status": "success", "message": "No new events found", "inserted": 0}
+            
+        # 3. Insertar en BigQuery
+        rows_to_insert = []
+        scan_time = datetime.now(timezone.utc).isoformat()
+        
+        for e in raw_events:
+            # Check for duplications locally to be safe
+            if e.get("event_name") in known_events:
+                continue
+                
+            rows_to_insert.append({
+                "id": str(uuid.uuid4()),
+                "event_name": e.get("event_name", ""),
+                "event_type": e.get("event_type", ""),
+                "event_date": e.get("event_date", ""),
+                "description": e.get("description", ""),
+                "source": e.get("source", ""),
+                "created_at": scan_time
+            })
+            
+        if not rows_to_insert:
+             return {"status": "success", "message": "No new non-duplicate events to insert", "inserted": 0}
+            
+        errors = bq_client.insert_rows_json(
+            f"{PROJECT_ID}.raw_layer.commercial_calendar",
+            rows_to_insert
+        )
+        
+        if errors:
+            print(f"Errores insertando en BQ (Calendar): {errors}")
+            raise HTTPException(status_code=500, detail="Error guardando en base de datos")
+            
+        return {"status": "success", "message": "Escaneo de calendario completado", "inserted": len(rows_to_insert)}
+        
+    except Exception as e:
+        print(f"Error en el flujo de calendario: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor procesando calendario.")
 
 if __name__ == "__main__":
     import uvicorn
