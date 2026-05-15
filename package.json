@@ -10,6 +10,7 @@
     "build": "cd dashboard && npm install && npm run build",
     "start": "cd dashboard && npm start",
     "sync:shopify": "node scripts/sync-shopify.js",
+    "sync:shopify-customers": "node scripts/sync-shopify-customers.js",
     "sync:klaviyo": "node scripts/sync-klaviyo.js",
     "sync:crisp": "node scripts/sync-crisp.js",
     "sync:gsc": "node scripts/sync-gsc.js"
