@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   // ── Paso 1: Sync conversaciones ───────────────────────────────────────────
   try {
     const { stdout, stderr } = await execAsync(
-      `node sync-crisp-incremental.js`,
+      `node sync-crisp-v2.js`,
       { cwd: scriptsDir, timeout: 5 * 60 * 1000 } // 5 min max
     );
     results.conversations = stdout || stderr || 'OK';

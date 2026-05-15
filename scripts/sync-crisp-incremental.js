@@ -1,4 +1,6 @@
 /**
+ * @deprecated Use sync-crisp-v2.js instead.
+ * 
  * sync-crisp-incremental.js
  *
  * Sincronización INCREMENTAL de conversaciones Crisp → BigQuery.
