@@ -11,7 +11,11 @@ import {
   Frown,
   Meh,
   Clock,
-  UserCheck
+  UserCheck,
+  Layers,
+  Activity,
+  GitBranch,
+  ExternalLink
 } from "lucide-react";
 import { 
   BarChart, 
@@ -49,6 +53,39 @@ interface AgentData {
   avg_csat: number | null;
 }
 
+interface PeakHoursData {
+  hourOfDay: number;
+  total_tickets: number;
+}
+
+interface ResolutionRateData {
+  date: string;
+  resolved_count: number;
+  unresolved_count: number;
+  total_count: number;
+}
+
+interface DuplicityDetail {
+  people_id: string;
+  visitor_nickname: string;
+  visitor_email: string;
+  channels_used: string[];
+  distinct_channels: number;
+  first_contact: string;
+  last_contact: string;
+  latest_session_id: string;
+}
+
+interface DuplicityData {
+  kpi: {
+    total_identified_users: number;
+    duplicated_users: number;
+    duplicity_rate_pct: number;
+  };
+  details: DuplicityDetail[];
+  crispWebsiteId: string;
+}
+
 export default function SupportPage() {
   const [mounted, setMounted] = useState(false);
   const now = new Date();
@@ -59,6 +96,10 @@ export default function SupportPage() {
   const [kpiData, setKpiData] = useState<KpiData | null>(null);
   const [sentimentData, setSentimentData] = useState<SentimentData[]>([]);
   const [agentData, setAgentData] = useState<AgentData[]>([]);
+  const [effortData, setEffortData] = useState<number | null>(null);
+  const [peakHoursData, setPeakHoursData] = useState<PeakHoursData[]>([]);
+  const [resolutionRateData, setResolutionRateData] = useState<ResolutionRateData[]>([]);
+  const [duplicityData, setDuplicityData] = useState<DuplicityData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { setMounted(true); }, []);
@@ -67,21 +108,33 @@ export default function SupportPage() {
     setLoading(true);
     try {
       // API Calls en paralelo
-      const [kpiRes, sentimentRes, agentsRes] = await Promise.all([
+      const [kpiRes, sentimentRes, agentsRes, effortRes, peakRes, rateRes, duplicityRes] = await Promise.all([
         fetch(`/api/kpis/crisp?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
         fetch(`/api/support/sentiment?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
-        fetch(`/api/support/agents?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`)
+        fetch(`/api/support/agents?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
+        fetch(`/api/support/resolution-effort?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
+        fetch(`/api/support/peak-hours?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
+        fetch(`/api/support/resolution-rate?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`),
+        fetch(`/api/support/duplicity?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`)
       ]);
 
-      const [kpiJson, sentimentJson, agentsJson] = await Promise.all([
+      const [kpiJson, sentimentJson, agentsJson, effortJson, peakJson, rateJson, duplicityJson] = await Promise.all([
         kpiRes.json(),
         sentimentRes.json(),
-        agentsRes.json()
+        agentsRes.json(),
+        effortRes.json(),
+        peakRes.json(),
+        rateRes.json(),
+        duplicityRes.json()
       ]);
 
       setKpiData(kpiJson);
       if (sentimentJson.success) setSentimentData(sentimentJson.data);
       if (agentsJson.success) setAgentData(agentsJson.data);
+      if (effortJson?.success) setEffortData(effortJson.avgMessages);
+      if (peakJson?.success) setPeakHoursData(peakJson.data);
+      if (rateJson?.success) setResolutionRateData(rateJson.data);
+      if (duplicityJson?.success) setDuplicityData(duplicityJson.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -148,7 +201,7 @@ export default function SupportPage() {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <KpiCard 
           title="Total Conversaciones" 
           value={loading ? "..." : kpiData?.totalConversations || 0} 
@@ -166,6 +219,12 @@ export default function SupportPage() {
           value={loading ? "..." : (kpiData && kpiData.avgCsat > 0) ? `${kpiData.avgCsat.toFixed(1)}/5` : "N/A"} 
           icon={Star} 
           color="amber"
+        />
+        <KpiCard 
+          title="Esfuerzo (Msjs/Ticket)" 
+          value={loading ? "..." : effortData !== null ? effortData : "N/A"} 
+          icon={Layers} 
+          color="violet"
         />
       </div>
 
@@ -261,6 +320,201 @@ export default function SupportPage() {
         </div>
       </div>
 
+      {/* New Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Peak Hours Chart */}
+        <div className="p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl relative overflow-hidden group">
+          <div className="flex items-center gap-2 mb-6 relative z-10">
+            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-400">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Horarios Pico</h2>
+              <p className="text-xs text-zinc-400">Volumen de tickets por hora del día</p>
+            </div>
+          </div>
+          
+          <div className="h-[300px] w-full relative z-10">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+              </div>
+            ) : peakHoursData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={peakHoursData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis 
+                    dataKey="hourOfDay" 
+                    stroke="#52525b" 
+                    fontSize={12} 
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => `${val}:00`}
+                  />
+                  <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <RechartsTooltip 
+                    cursor={{fill: '#27272a', opacity: 0.4}}
+                    contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '1rem', color: '#fff' }}
+                    labelFormatter={(label) => `Hora: ${label}:00`}
+                  />
+                  <Bar dataKey="total_tickets" name="Tickets" fill="#f97316" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-500">Sin datos de horarios</div>
+            )}
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+        </div>
+
+        {/* Resolution Rate Area Chart */}
+        <div className="p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl relative overflow-hidden group">
+          <div className="flex items-center gap-2 mb-6 relative z-10">
+            <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Evolución de Resolución</h2>
+              <p className="text-xs text-zinc-400">Tickets resueltos vs pendientes por día</p>
+            </div>
+          </div>
+          
+          <div className="h-[300px] w-full relative z-10">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+              </div>
+            ) : resolutionRateData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={resolutionRateData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorResolved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorUnresolved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#52525b" 
+                    fontSize={12} 
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => {
+                      const d = new Date(val);
+                      return `${d.getDate()}/${d.getMonth()+1}`;
+                    }}
+                  />
+                  <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '1rem', color: '#fff' }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Area type="monotone" dataKey="resolved_count" name="Resueltos" stroke="#10b981" fillOpacity={1} fill="url(#colorResolved)" stackId="1" />
+                  <Area type="monotone" dataKey="unresolved_count" name="Pendientes" stroke="#f43f5e" fillOpacity={1} fill="url(#colorUnresolved)" stackId="1" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-500">Sin datos de resolución</div>
+            )}
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+        </div>
+      </div>
+
+      {/* Duplicity Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <KpiCard 
+            title="Tasa de Duplicidad" 
+            value={loading ? "..." : duplicityData ? `${duplicityData.kpi.duplicity_rate_pct.toFixed(1)}%` : "N/A"} 
+            icon={GitBranch} 
+            color="indigo"
+          />
+        </div>
+        <div className="lg:col-span-2 p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl relative overflow-hidden group">
+          <div className="flex items-center gap-2 mb-6 relative z-10">
+            <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+              <GitBranch className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Duplicidad Omnicanal</h2>
+              <p className="text-xs text-zinc-400">Usuarios en múltiples canales (48h)</p>
+            </div>
+          </div>
+          
+          <div className="relative z-10 overflow-x-auto max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {loading ? (
+              <div className="w-full h-32 flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+              </div>
+            ) : duplicityData?.details && duplicityData.details.length > 0 ? (
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 rounded-tl-lg">Usuario</th>
+                    <th className="px-4 py-3">Canales</th>
+                    <th className="px-4 py-3 text-right">Último Contacto</th>
+                    <th className="px-4 py-3 text-right rounded-tr-lg">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {duplicityData.details.map((detail, i) => (
+                    <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3 font-medium text-white">
+                        <div className="flex flex-col">
+                          <span>{detail.visitor_nickname || 'Anon'}</span>
+                          <span className="text-xs text-zinc-500">{detail.visitor_email || 'Sin email'}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1 flex-wrap">
+                          {detail.channels_used.map(ch => {
+                            let color = "bg-zinc-500/20 text-zinc-400 border-zinc-500/30";
+                            if (ch === 'chat') color = "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
+                            if (ch === 'email') color = "bg-blue-500/20 text-blue-400 border-blue-500/30";
+                            if (ch === 'whatsapp') color = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+                            if (ch === 'instagram') color = "bg-pink-500/20 text-pink-400 border-pink-500/30";
+                            if (ch === 'facebook') color = "bg-blue-600/20 text-blue-500 border-blue-600/30";
+                            
+                            return (
+                              <span key={ch} className={cn("text-[10px] px-2 py-0.5 rounded-full border", color)}>
+                                {ch}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-400 text-xs">
+                        {new Date(detail.last_contact).toLocaleString('es', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <a 
+                          href={`https://app.crisp.chat/website/${duplicityData.crispWebsiteId}/inbox/${detail.latest_session_id}/`} 
+                          target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center p-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 rounded-lg transition-colors border border-indigo-500/20"
+                          title="Ver en Crisp"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="w-full h-32 flex items-center justify-center text-zinc-500">No se detectaron duplicidades en este período.</div>
+            )}
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000 pointer-events-none" />
+        </div>
+      </div>
+
       {/* Agents Table */}
       <div className="p-6 rounded-3xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl relative overflow-hidden">
         <div className="flex items-center gap-2 mb-6 relative z-10">
@@ -323,11 +577,13 @@ export default function SupportPage() {
 }
 
 // Reusable KPI Card Component
-function KpiCard({ title, value, icon: Icon, color }: { title: string, value: string | number, icon: any, color: 'blue' | 'emerald' | 'amber' }) {
+function KpiCard({ title, value, icon: Icon, color }: { title: string, value: string | number, icon: any, color: 'blue' | 'emerald' | 'amber' | 'violet' | 'indigo' }) {
   const colorStyles = {
     blue: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    violet: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
+    indigo: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
   };
 
   return (

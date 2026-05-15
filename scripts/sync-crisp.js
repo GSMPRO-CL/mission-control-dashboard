@@ -1,3 +1,6 @@
+/**
+ * @deprecated Use sync-crisp-v2.js --full instead.
+ */
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { BigQuery } = require('@google-cloud/bigquery');
 
