@@ -141,6 +141,19 @@ const QUERY_EVENTS = `
             subjectType
             subjectId
           }
+          ... on CommentEvent {
+            author {
+              id
+              name
+            }
+            subject {
+              __typename
+              ... on Order { id name }
+              ... on DraftOrder { id name }
+              ... on Customer { id }
+              ... on Company { id name }
+            }
+          }
         }
       }
       pageInfo { hasNextPage endCursor }
@@ -159,6 +172,11 @@ function normalizeText(text) {
 }
 
 function extractStaffId(node, staffList) {
+  // Prioridad 0: Campo tipado author.id (CommentEvent)
+  if (node.author && node.author.id) {
+    return cleanId(node.author.id);
+  }
+
   // 1. Intentar extraer del GID (staff_member_id)
   const gidMatch = node.id.match(/staff_member_id=(\d+)/);
   if (gidMatch) {
@@ -320,8 +338,8 @@ async function syncAuditLog() {
             staff_id: staffId,
             staff_email: null,
             action: node.action,
-            subject_type: node.subjectType || 'N/A',
-            subject_id: cleanId(node.subjectId) || 'N/A',
+            subject_type: node.subjectType || (node.subject && node.subject.__typename) || 'N/A',
+            subject_id: cleanId(node.subjectId) || (node.subject && cleanId(node.subject.id)) || 'N/A',
             ip_address: null,
             user_agent: null,
             raw_payload: JSON.stringify(node),
