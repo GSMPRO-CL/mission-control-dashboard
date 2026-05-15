@@ -1,0 +1,12 @@
+{
+  "name": "sync-competitor-prices",
+  "version": "1.0.0",
+  "description": "Weekly competitiveness sync via Cloud Function",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.9.0"
+  }
+}

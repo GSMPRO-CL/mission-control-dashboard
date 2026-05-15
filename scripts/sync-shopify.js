@@ -3,6 +3,7 @@ const { BigQuery } = require('@google-cloud/bigquery');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { shopifyGraphQL } = require('./lib/shopify-graphql.js');
 
 const DATASET_ID = 'ecommerce_data';
 
@@ -70,6 +71,60 @@ function toBQDatetime(isoString) {
   return new Date(isoString).toISOString().replace('Z', '');
 }
 
+async function fetchOrderMetafields(orderIds) {
+  const map = {};
+  const chunkSize = 100;
+  
+  console.log(`\nObteniendo metafields para ${orderIds.length} órdenes...`);
+  for (let i = 0; i < orderIds.length; i += chunkSize) {
+    const chunk = orderIds.slice(i, i + chunkSize);
+    const gids = chunk.map(id => `"gid://shopify/Order/${id}"`).join(', ');
+    const query = `
+      query {
+        nodes(ids: [${gids}]) {
+          ... on Order {
+            id
+            metafield(namespace: "custom", key: "estado_de_pedido") {
+              value
+            }
+          }
+        }
+      }
+    `;
+    
+    try {
+      const res = await shopifyGraphQL(query);
+      if (res && res.nodes) {
+        res.nodes.forEach(node => {
+          if (node && node.id) {
+            const numericId = node.id.split('/').pop();
+            let estado = null;
+            if (node.metafield && node.metafield.value) {
+              try {
+                // value is something like '["14. No comprar..."]'
+                const parsed = JSON.parse(node.metafield.value);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  estado = parsed[0];
+                } else {
+                  estado = node.metafield.value;
+                }
+              } catch (e) {
+                estado = node.metafield.value;
+              }
+            }
+            map[numericId] = estado;
+          }
+        });
+      }
+      process.stdout.write(`\rMetafields obtenidos: ${Math.min(i + chunkSize, orderIds.length)}/${orderIds.length}...`);
+    } catch (err) {
+      console.error(`\nError fetching metafields chunk:`, err);
+    }
+  }
+  console.log("");
+  return map;
+}
+
 async function writeNdjsonAndLoad(bq, dataset, tableName, stagingTableName, dataArray) {
   if (dataArray.length === 0) return;
   
@@ -115,10 +170,11 @@ async function runMerge(bq, stagingTableName, targetTableName, mergeType) {
           total_discounts = S.total_discounts,
           financial_status = S.financial_status,
           fulfillment_status = S.fulfillment_status,
-          currency = S.currency
+          currency = S.currency,
+          estado_de_pedido = S.estado_de_pedido
       WHEN NOT MATCHED THEN
-        INSERT (id, order_number, created_at, updated_at, total_price, subtotal_price, total_discounts, financial_status, fulfillment_status, currency)
-        VALUES (S.id, S.order_number, S.created_at, S.updated_at, S.total_price, S.subtotal_price, S.total_discounts, S.financial_status, S.fulfillment_status, S.currency)
+        INSERT (id, order_number, created_at, updated_at, total_price, subtotal_price, total_discounts, financial_status, fulfillment_status, currency, estado_de_pedido)
+        VALUES (S.id, S.order_number, S.created_at, S.updated_at, S.total_price, S.subtotal_price, S.total_discounts, S.financial_status, S.fulfillment_status, S.currency, S.estado_de_pedido)
     `;
   } else if (mergeType === 'lines') {
     query = `
@@ -159,6 +215,10 @@ async function runSync() {
       return;
     }
 
+    // Fetch metafields via GraphQL
+    const orderIds = orders.map(o => o.id);
+    const metafieldsMap = await fetchOrderMetafields(orderIds);
+
     // Transform Data
     const bqOrders = orders.map(o => ({
       id: o.id,
@@ -170,7 +230,8 @@ async function runSync() {
       total_discounts: parseFloat(o.total_discounts),
       financial_status: o.financial_status || 'unknown',
       fulfillment_status: o.fulfillment_status || 'unfulfilled',
-      currency: o.currency
+      currency: o.currency,
+      estado_de_pedido: metafieldsMap[o.id] || null
     }));
 
     const bqLines = [];

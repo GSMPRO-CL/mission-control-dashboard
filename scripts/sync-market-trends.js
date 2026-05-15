@@ -87,11 +87,24 @@ class SerpApiTrendsProvider extends TrendsProvider {
     if (data.error) throw new Error(`SerpApi: ${data.error}`);
 
     const timeline = data.interest_over_time?.timeline_data || [];
-    return timeline.map(point => ({
-      date:      point.date?.split(' ')[0] ?? '',  // "Apr 28 – May 4, 2024" → "Apr 28"
-      value:     point.values?.[0]?.extracted_value ?? 0,
-      isPartial: point.is_partial ?? false,
-    })).filter(p => p.date);
+    return timeline.map(point => {
+      let parsedDate = '';
+      if (point.date) {
+        const match = point.date.match(/^([A-Za-z]+ \d+).*?, (\d{4})/);
+        if (match) {
+          const d = new Date(`${match[1]} ${match[2]}`);
+          if (!isNaN(d)) parsedDate = d.toISOString().split('T')[0];
+        } else {
+          const d2 = new Date(point.date);
+          if (!isNaN(d2)) parsedDate = d2.toISOString().split('T')[0];
+        }
+      }
+      return {
+        date:      parsedDate,
+        value:     point.values?.[0]?.extracted_value ?? 0,
+        isPartial: point.is_partial ?? false,
+      };
+    }).filter(p => p.date);
   }
 }
 

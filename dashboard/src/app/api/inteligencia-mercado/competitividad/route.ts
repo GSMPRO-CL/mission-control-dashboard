@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const SERPAPI = 'https://serpapi.com';
 
+const COUNTRY_CURRENCY_MAP: Record<string, string> = {
+  us: 'USD',
+  cl: 'CLP',
+  mx: 'MXN',
+  ar: 'ARS',
+  co: 'COP',
+  es: 'EUR',
+};
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q         = (searchParams.get('q') || '').trim();
-  const ourPrice  = parseFloat(searchParams.get('our_price') || '0');
+  const ourBasePrice = parseFloat(searchParams.get('our_price') || '0');
   const country   = searchParams.get('country') || 'us';
 
   if (!q) {
@@ -40,6 +49,24 @@ export async function GET(req: NextRequest) {
 
     if (shoppingJson.error) {
       return NextResponse.json({ success: false, error: shoppingJson.error }, { status: 400 });
+    }
+
+    // -- Conversión de Moneda (USD -> Moneda Destino) --
+    let ourPrice = ourBasePrice;
+    let exchangeRate = 1;
+    const targetCurrency = COUNTRY_CURRENCY_MAP[country] || 'USD';
+    
+    if (ourBasePrice > 0 && targetCurrency !== 'USD') {
+      try {
+        const xrRes = await fetch('https://api.exchangerate-api.com/v4/latest/USD', { cache: 'no-store' });
+        const xrData = await xrRes.json();
+        if (xrData && xrData.rates && xrData.rates[targetCurrency]) {
+          exchangeRate = xrData.rates[targetCurrency];
+          ourPrice = ourBasePrice * exchangeRate;
+        }
+      } catch (e) {
+        console.warn('Error obteniendo tipo de cambio, usando 1:1 fallback', e);
+      }
     }
 
     const raw: any[] = shoppingJson.shopping_results ?? [];
@@ -88,6 +115,9 @@ export async function GET(req: NextRequest) {
       data: {
         query: q,
         ourPrice: ourPrice > 0 ? ourPrice : null,
+        ourBasePrice: ourBasePrice > 0 ? ourBasePrice : null,
+        targetCurrency,
+        exchangeRate,
         competitors,
         summary: {
           total:              competitors.length,

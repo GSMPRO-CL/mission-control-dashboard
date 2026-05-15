@@ -15,6 +15,8 @@ Este documento sirve como plano arquitectónico del desarrollo modular del proye
 - [x] **Tráfico / Pagado (Google Ads)** (Integración OAuth2 offline y tableros GAQL).
 - [x] **Equipo / Actividad** (Motor Audit Log Puller con modelo SCD-2 de asignación).
 - [x] **Customer Services (Soporte)** (Extracción NLP Crisp, SLA y Rendimiento de Agentes).
+- [x] **Inteligencia de Mercado / Competitividad** (Monitor de precios, Patrón Strategy SerpApi).
+- [x] **Inteligencia de Mercado / Tendencias** (Tendencias históricas SerpApi y algoritmo de señales).
 
 ---
 
@@ -27,18 +29,11 @@ Este documento sirve como plano arquitectónico del desarrollo modular del proye
   - [x] API Route y Frontend (Treemap + Ranking) listos.
   - [ ] **Bloqueado:** Google Ads Basic Access pendiente de aprobación. Ver `MARKET_INTELLIGENCE_SPECS.md` Fase 1.
 
-- [ ] **Inteligencia de Mercado / Competitividad** ⏸️
-  - [x] Tabla BigQuery `competitor_prices` creada (particionada, multi-proveedor).
-  - [x] Pipeline `sync-competitor-prices.js` con patrón Strategy construido.
-  - [x] API Route y Frontend (Monitor de precios con códigos de color) listos.
-  - [x] `SERPAPI_KEY` registrada en `.env` y `env.yaml`.
-  - [ ] **Bloqueado:** Plan SerpApi Free agotado (250/mes). Requiere plan pago para ejecutar sync.
-
-- [ ] **Inteligencia de Mercado / Tendencias** ⏸️
-  - [x] Tabla BigQuery `market_trends` creada (histórica, particionada 2 años).
-  - [x] Pipeline `sync-market-trends.js` con patrón Strategy y algoritmo de señales construido.
-  - [x] API Route y Frontend (gráfico de líneas + tarjetas Breakout/Rising/Risk) listos.
-  - [ ] **Bloqueado:** Mismo plan SerpApi que Fase 2. Actualizar plan desbloquea ambas fases.
+- [ ] **Inteligencia de Mercado / Dimensión de Mercado** ⏸️
+  - [x] Tabla BigQuery `market_size_metrics` creada.
+  - [x] Pipeline `sync-market-size.js` construido.
+  - [x] API Route y Frontend (Treemap + Ranking) listos.
+  - [ ] **Bloqueado:** Google Ads Basic Access pendiente de aprobación. Ver `MARKET_INTELLIGENCE_SPECS.md` Fase 1.
 
 ---
 

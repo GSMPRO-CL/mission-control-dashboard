@@ -35,9 +35,12 @@ interface KpiMetrics {
   avgCpc: number;
   totalCost: number;
   conversions: number;
-  costPerConversion: number;
+  costPerPurchase: number;
+  costPerMicroConversion: number;
   conversionsValue: number;
   roas: number;
+  purchasesBreakdown?: Record<string, { conversions: number; value: number }>;
+  microBreakdown?: Record<string, { conversions: number; value: number }>;
 }
 
 interface TrendData {
@@ -59,7 +62,11 @@ interface CampaignData {
   avgCpc: number;
   cost: number;
   conversions: number;
+  costPerPurchase: number;
+  costPerMicroConversion: number;
   roas: number;
+  purchasesBreakdown?: Record<string, { conversions: number; value: number }>;
+  microBreakdown?: Record<string, { conversions: number; value: number }>;
 }
 
 interface ApiResponseData {
@@ -78,8 +85,9 @@ export default function TraficoGoogleAdsPage() {
   const [mounted, setMounted] = useState(false);
 
   const now = new Date();
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+  // Se establece por defecto el 1 de enero del año actual para recabar toda la data del año
+  const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
+  const [startDate, setStartDate] = useState(firstDayOfYear.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
 
   useEffect(() => {
@@ -129,15 +137,16 @@ export default function TraficoGoogleAdsPage() {
       + `CPC Promedio,$${data.kpis.avgCpc}\n`
       + `Gasto Total,$${data.kpis.totalCost}\n`
       + `Conversiones,${data.kpis.conversions}\n`
-      + `Costo por Conversión,$${data.kpis.costPerConversion}\n`
+      + `CPA Compras,$${data.kpis.costPerPurchase}\n`
+      + `CPA Micro,$${data.kpis.costPerMicroConversion}\n`
       + `ROAS,${data.kpis.roas}x\n`
       + "\n=== TENDENCIA DIARIA ===\n"
       + "Fecha,Impresiones,Clics,Gasto,Conversiones\n"
       + data.trend.map(row => `${row.date},${row.impressions},${row.clicks},${row.cost},${row.conversions}`).join("\n")
       + "\n\n=== CAMPAÑAS ===\n"
-      + "Campaña,Estado,Canal,Impresiones,Clics,CTR,CPC,Gasto,Conversiones,ROAS\n"
+      + "Campaña,Estado,Canal,Impresiones,Clics,CTR,CPC,Gasto,Conversiones,CPA,ROAS\n"
       + data.campaigns.map(c =>
-        `"${c.name}",${c.status},${c.channelType},${c.impressions},${c.clicks},${(c.ctr * 100).toFixed(2)}%,$${c.avgCpc.toFixed(2)},$${c.cost.toFixed(2)},${c.conversions},${c.roas.toFixed(2)}x`
+        `"${c.name}",${c.status},${c.channelType},${c.impressions},${c.clicks},${(c.ctr * 100).toFixed(2)}%,$${c.avgCpc.toFixed(2)},$${c.cost.toFixed(2)},${c.conversions},$${c.costPerPurchase.toFixed(2)},${c.roas.toFixed(2)}x`
       ).join("\n");
 
     const encodedUri = encodeURI(csvContent);
@@ -248,22 +257,138 @@ export default function TraficoGoogleAdsPage() {
           loading={loading}
           subtitle="Inversión en el periodo"
         />
-        <KpiCard
-          title="Conversiones"
-          value={data ? formatNumber(data.kpis.conversions) : '...'}
-          icon={Target}
-          color="emerald"
-          loading={loading}
-          subtitle="Acciones completadas"
-        />
-        <KpiCard
-          title="Costo / Conversión"
-          value={data ? formatCurrencyDecimal(data.kpis.costPerConversion) : '...'}
-          icon={BarChart3}
-          color="indigo"
-          loading={loading}
-          subtitle="Costo por acción"
-        />
+        <div className="p-5 rounded-2xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl flex flex-col relative overflow-hidden group hover:shadow-xl transition-all duration-300 md:col-span-2 lg:col-span-1">
+          <div className="flex justify-between items-start relative z-10">
+            <div>
+              <p className="text-sm font-medium text-zinc-400">Conversiones (Compras)</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Métrica de valor</p>
+            </div>
+            <div className="p-2 rounded-xl border text-emerald-400 bg-emerald-500/10 border-emerald-500/20">
+              <Target className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4 relative z-10 flex-1 flex flex-col">
+            {loading ? (
+              <div className="h-8 w-24 bg-white/5 rounded animate-pulse" />
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-white tracking-tight">
+                  {data ? formatNumber(data.kpis.conversions) : '...'}
+                </h3>
+                
+                <div className="mt-3 flex-1 overflow-y-auto pr-1 space-y-3 max-h-[140px] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {/* Compras */}
+                  {data && data.kpis.purchasesBreakdown && Object.entries(data.kpis.purchasesBreakdown).length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-emerald-500/80 uppercase tracking-wider mb-1">Compras</p>
+                      {Object.entries(data.kpis.purchasesBreakdown)
+                        .sort((a, b) => b[1].conversions - a[1].conversions)
+                        .map(([name, metrics]) => {
+                          const cleanName = name.replace('Google Ads || ', '').split(' || ')[0];
+                          return (
+                            <div key={name} className="flex items-center justify-between text-xs border-b border-white/5 pb-1.5 mb-1.5 last:border-0 last:pb-0 last:mb-0">
+                              <span className="text-zinc-300 truncate pr-2" title={name}>{cleanName}</span>
+                              <span className="text-emerald-400 font-medium whitespace-nowrap">{Number(metrics.conversions).toFixed(1)}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+
+                  {/* Micro-conversiones */}
+                  {data && data.kpis.microBreakdown && Object.entries(data.kpis.microBreakdown).length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Micro-conversiones</p>
+                      {Object.entries(data.kpis.microBreakdown)
+                        .sort((a, b) => b[1].conversions - a[1].conversions)
+                        .map(([name, metrics]) => {
+                          const cleanName = name.replace('Google Ads || ', '').split(' || ')[0];
+                          return (
+                            <div key={name} className="flex items-center justify-between text-xs border-b border-white/5 pb-1.5 mb-1.5 last:border-0 last:pb-0 last:mb-0">
+                              <span className="text-zinc-500 truncate pr-2" title={name}>{cleanName}</span>
+                              <span className="text-zinc-400 font-medium whitespace-nowrap">{Number(metrics.conversions).toFixed(1)}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                  
+                  {data && (!data.kpis.purchasesBreakdown || Object.keys(data.kpis.purchasesBreakdown).length === 0) && (!data.kpis.microBreakdown || Object.keys(data.kpis.microBreakdown).length === 0) && (
+                    <p className="text-xs text-zinc-500">Sin datos de objetivos</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 bg-emerald-500" />
+        </div>
+        <div className="p-5 rounded-2xl border border-white/10 bg-zinc-950/50 backdrop-blur-xl flex flex-col relative overflow-hidden group hover:shadow-xl transition-all duration-300 md:col-span-2 lg:col-span-1">
+          <div className="flex justify-between items-start relative z-10">
+            <div>
+              <p className="text-sm font-medium text-zinc-400">CPA (Costo por Acción)</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Basado en inversión total</p>
+            </div>
+            <div className="p-2 rounded-xl border text-indigo-400 bg-indigo-500/10 border-indigo-500/20">
+              <BarChart3 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4 relative z-10 flex-1 flex flex-col">
+            {loading ? (
+              <div className="h-8 w-24 bg-white/5 rounded animate-pulse" />
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-white tracking-tight">
+                  {data ? formatCurrencyDecimal(data.kpis.costPerPurchase) : '...'}
+                </h3>
+                
+                <div className="mt-3 flex-1 overflow-y-auto pr-1 space-y-3 max-h-[140px] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {/* CPA Compras */}
+                  {data && data.kpis.purchasesBreakdown && Object.entries(data.kpis.purchasesBreakdown).length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-emerald-500/80 uppercase tracking-wider mb-1">CPA Compras</p>
+                      {Object.entries(data.kpis.purchasesBreakdown)
+                        .sort((a, b) => b[1].conversions - a[1].conversions)
+                        .map(([name, metrics]) => {
+                          const cleanName = name.replace('Google Ads || ', '').split(' || ')[0];
+                          const cpa = metrics.conversions > 0 ? data.kpis.totalCost / metrics.conversions : 0;
+                          return (
+                            <div key={name} className="flex items-center justify-between text-xs border-b border-white/5 pb-1.5 mb-1.5 last:border-0 last:pb-0 last:mb-0">
+                              <span className="text-zinc-300 truncate pr-2" title={name}>{cleanName}</span>
+                              <span className="text-emerald-400 font-medium whitespace-nowrap">{formatCurrencyDecimal(cpa)}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+
+                  {/* CPA Micro-conversiones */}
+                  {data && data.kpis.microBreakdown && Object.entries(data.kpis.microBreakdown).length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">CPA Micro-conv.</p>
+                      {Object.entries(data.kpis.microBreakdown)
+                        .sort((a, b) => b[1].conversions - a[1].conversions)
+                        .map(([name, metrics]) => {
+                          const cleanName = name.replace('Google Ads || ', '').split(' || ')[0];
+                          const cpa = metrics.conversions > 0 ? data.kpis.totalCost / metrics.conversions : 0;
+                          return (
+                            <div key={name} className="flex items-center justify-between text-xs border-b border-white/5 pb-1.5 mb-1.5 last:border-0 last:pb-0 last:mb-0">
+                              <span className="text-zinc-500 truncate pr-2" title={name}>{cleanName}</span>
+                              <span className="text-zinc-400 font-medium whitespace-nowrap">{formatCurrencyDecimal(cpa)}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                  
+                  {data && (!data.kpis.purchasesBreakdown || Object.keys(data.kpis.purchasesBreakdown).length === 0) && (!data.kpis.microBreakdown || Object.keys(data.kpis.microBreakdown).length === 0) && (
+                    <p className="text-xs text-zinc-500">Sin datos de objetivos</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 bg-indigo-500" />
+        </div>
         <KpiCard
           title="ROAS"
           value={data ? formatRoas(data.kpis.roas) : '...'}
@@ -455,6 +580,7 @@ export default function TraficoGoogleAdsPage() {
                   <th className="px-4 py-3 text-right">CPC</th>
                   <th className="px-4 py-3 text-right">Gasto</th>
                   <th className="px-4 py-3 text-right">Conv.</th>
+                  <th className="px-4 py-3 text-right">CPA</th>
                   <th className="px-4 py-3 text-right rounded-tr-lg">ROAS</th>
                 </tr>
               </thead>
@@ -474,9 +600,88 @@ export default function TraficoGoogleAdsPage() {
                     <td className="px-4 py-3 text-right font-medium text-white">{formatNumber(campaign.clicks)}</td>
                     <td className="px-4 py-3 text-right text-amber-400">{formatPercent(campaign.ctr)}</td>
                     <td className="px-4 py-3 text-right text-zinc-300">{formatCurrencyDecimal(campaign.avgCpc)}</td>
-                    <td className="px-4 py-3 text-right text-rose-400 font-medium">{formatCurrencyDecimal(campaign.cost)}</td>
-                    <td className="px-4 py-3 text-right text-emerald-400 font-medium">{campaign.conversions}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right text-rose-400 font-medium align-top">{formatCurrencyDecimal(campaign.cost)}</td>
+                    <td className="px-4 py-3 text-right align-top">
+                      <div className="text-emerald-400 font-medium">{campaign.conversions}</div>
+                      
+                      {/* Desglose de Compras */}
+                      {campaign.purchasesBreakdown && Object.keys(campaign.purchasesBreakdown).length > 0 && (
+                        <div className="mt-2 flex flex-col items-end gap-1.5">
+                          {Object.entries(campaign.purchasesBreakdown)
+                            .sort((a, b) => b[1].conversions - a[1].conversions)
+                            .filter(([_, metrics]) => metrics.conversions > 0)
+                            .map(([name, metrics]) => {
+                              const cleanName = name.replace('Google Ads || ', '').split(' || ')[0].substring(0, 18);
+                              return (
+                                <span key={name} className="text-[10px] text-zinc-300 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 whitespace-nowrap shadow-sm" title={name}>
+                                  <span className="text-emerald-400 font-bold">{Number(metrics.conversions).toFixed(1)}</span>
+                                  <span className="truncate max-w-[120px]">{cleanName}</span>
+                                </span>
+                              );
+                            })}
+                        </div>
+                      )}
+
+                      {/* Desglose de Micro-conversiones */}
+                      {campaign.microBreakdown && Object.keys(campaign.microBreakdown).length > 0 && (
+                        <div className="mt-1.5 flex flex-col items-end gap-1">
+                          {Object.entries(campaign.microBreakdown)
+                            .sort((a, b) => b[1].conversions - a[1].conversions)
+                            .filter(([_, metrics]) => metrics.conversions > 0)
+                            .map(([name, metrics]) => {
+                              const cleanName = name.replace('Google Ads || ', '').split(' || ')[0].substring(0, 18);
+                              return (
+                                <span key={name} className="text-[9px] text-zinc-500 bg-zinc-500/10 border border-zinc-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap" title={name}>
+                                  <span className="text-zinc-400 font-semibold">{Number(metrics.conversions).toFixed(1)}</span>
+                                  <span className="truncate max-w-[100px]">{cleanName}</span>
+                                </span>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right align-top">
+                      <div className="text-emerald-400 font-medium">{formatCurrencyDecimal(campaign.costPerPurchase)}</div>
+                      
+                      {/* Desglose CPA Compras */}
+                      {campaign.purchasesBreakdown && Object.keys(campaign.purchasesBreakdown).length > 0 && (
+                        <div className="mt-2 flex flex-col items-end gap-1.5">
+                          {Object.entries(campaign.purchasesBreakdown)
+                            .sort((a, b) => b[1].conversions - a[1].conversions)
+                            .filter(([_, metrics]) => metrics.conversions > 0)
+                            .map(([name, metrics]) => {
+                              const cleanName = name.replace('Google Ads || ', '').split(' || ')[0].substring(0, 18);
+                              const cpa = campaign.cost / metrics.conversions;
+                              return (
+                                <span key={name} className="text-[10px] text-zinc-300 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 whitespace-nowrap shadow-sm" title={name}>
+                                  <span className="text-emerald-400 font-bold">{formatCurrencyDecimal(cpa)}</span>
+                                  <span className="truncate max-w-[120px]">{cleanName}</span>
+                                </span>
+                              );
+                            })}
+                        </div>
+                      )}
+
+                      {/* Desglose CPA Micro-conversiones */}
+                      {campaign.microBreakdown && Object.keys(campaign.microBreakdown).length > 0 && (
+                        <div className="mt-1.5 flex flex-col items-end gap-1">
+                          {Object.entries(campaign.microBreakdown)
+                            .sort((a, b) => b[1].conversions - a[1].conversions)
+                            .filter(([_, metrics]) => metrics.conversions > 0)
+                            .map(([name, metrics]) => {
+                              const cleanName = name.replace('Google Ads || ', '').split(' || ')[0].substring(0, 18);
+                              const cpa = campaign.cost / metrics.conversions;
+                              return (
+                                <span key={name} className="text-[9px] text-zinc-500 bg-zinc-500/10 border border-zinc-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 whitespace-nowrap" title={name}>
+                                  <span className="text-zinc-400 font-semibold">{formatCurrencyDecimal(cpa)}</span>
+                                  <span className="truncate max-w-[100px]">{cleanName}</span>
+                                </span>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right align-top">
                       <span className={cn(
                         "font-bold",
                         campaign.roas >= 3 ? "text-emerald-400" :

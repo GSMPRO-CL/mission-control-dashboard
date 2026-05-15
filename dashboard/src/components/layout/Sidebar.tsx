@@ -55,6 +55,7 @@ const navItems: NavItem[] = [
     icon: Globe,
     subItems: [
       { name: 'General', href: '/trafico/general' },
+      { name: 'Google Analytics (GA4)', href: '/trafico/google-analytics' },
       { name: 'Orgánico (Search Console)', href: '/trafico/organico' },
       { name: 'Pagado (Google Ads)', href: '/trafico/pagado-google' },
       { name: 'Pagado (Meta Ads)', href: '/trafico/pagado-meta' },
@@ -98,6 +99,7 @@ const navItems: NavItem[] = [
     name: 'Compras', 
     icon: Truck,
     subItems: [
+      { name: 'Pedidos por comprar', href: '/compras/pedidos-por-comprar' },
       { name: 'Órdenes de Compra', href: '/compras/ordenes' },
       { name: 'Proveedores', href: '/compras/proveedores' },
     ]

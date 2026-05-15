@@ -32,11 +32,11 @@ Este documento mantiene un registro vivo de los requerimientos y el avance estru
 7. **Globales:** Sumatoria total de todos los productos para obtener el Market Size Global y Market Share Global.
 
 ## Fase 2: Competitividad (Monitor de Precios)
-**Estado: ⏸️ EN ESPERA — Cuenta SerpApi sin créditos disponibles (Plan Free agotado)**
+**Estado: ✅ COMPLETADO — Pipeline funcional y operando con SerpApi.**
 
-### Bloqueo Activo
-- **Causa Raíz:** La cuenta de SerpApi (`sales@proshoproyal.net`) tiene **Plan Free (250 búsquedas/mes)** y ya agotó las búsquedas del mes.
-- **Acción requerida:** Actualizar a un plan pago en [serpapi.com/pricing](https://serpapi.com/pricing) para ejecutar el sync de 1,522 productos.
+### Acciones Realizadas
+- **Resolución:** Se validó que la cuenta de SerpApi (`sales@proshoproyal.net`) tiene suficientes créditos (Developer Plan con 4000+ búsquedas). El pipeline fue ejecutado exitosamente, poblando la tabla `competitor_prices` en BigQuery.
+- **Frontend:** API y Dashboard consumiendo datos reales.
 
 ### Para reanudar cuando se actualice el plan SerpApi
 1. Validar créditos: `node -e "require('dotenv').config({path:'.env'}); fetch('https://serpapi.com/account?api_key='+process.env.SERPAPI_KEY).then(r=>r.json()).then(d=>console.log('Créditos:', d.total_searches_left))"`
@@ -58,12 +58,12 @@ Este documento mantiene un registro vivo de los requerimientos y el avance estru
 3. **Escalabilidad (Open Architecture):** Diseñar el código con un patrón de "Proveedores de Scraping", permitiendo que a futuro se conecten otros métodos de tracking de precios (ej. scraping directo, APIs de competidores) sin romper el flujo.
 
 ## Fase 3: Tendencias (Google Trends)
-**Estado: ⏸️ EN ESPERA — Misma dependencia que Fase 2: Plan SerpApi pago requerido**
+**Estado: ✅ COMPLETADO — Datos históricos ingestados y señales funcionales.**
 
-### Bloqueo Activo
-- **Causa Raíz:** Google Trends no tiene API pública oficial sin autenticación de sesión. Todas las alternativas de npm (`google-trends-api`) han sido bloqueadas por deteción de bots de Google. SerpApi es el proveedor más robusto, pero comparte el mismo plan con la Fase 2.
-- **Ventaja:** Actualizar el plan de SerpApi desbloquea Fase 2 Y Fase 3 simultáneamente.
-- **Alternativa independiente:** `DataForSEO` (variables ya documentadas en el pipeline).
+### Acciones Realizadas
+- **Resolución:** Al igual que en la Fase 2, la API Key con Developer Plan permitió ejecutar el pipeline de tendencias sin problemas de rate limiting.
+- **Formato de Fechas:** Se corrigió el formato de fecha retornado por Google Trends para ser compatible con BigQuery `DATE`.
+- **Frontend:** Tarjetas de Breakout/Rising/Risk activas con datos reales.
 
 ### Para reanudar cuando se actualice el plan SerpApi
 1. Verificar créditos: `node -e "require('dotenv').config({path:'.env'}); fetch('https://serpapi.com/account?api_key='+process.env.SERPAPI_KEY).then(r=>r.json()).then(d=>console.log('Left:', d.total_searches_left))"`

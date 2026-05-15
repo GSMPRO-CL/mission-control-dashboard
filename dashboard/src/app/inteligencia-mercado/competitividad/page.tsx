@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   ShieldCheck, TrendingDown, TrendingUp, Search,
   RefreshCw, ExternalLink, Star, Truck, CreditCard,
-  CheckCircle2, XCircle, AlertCircle,
+  CheckCircle2, XCircle, AlertCircle, Save, Trophy
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,19 +34,40 @@ interface Summary {
   competitivenessRate: number | null;
 }
 
+interface TopProduct {
+  id: number;
+  title: string;
+  total_sold: number;
+  our_price: number | null;
+  avg_competitor_price: number | null;
+  min_competitor_price: number | null;
+}
+
 interface ApiResult {
-  query:       string;
-  ourPrice:    number | null;
-  competitors: Competitor[];
-  summary:     Summary;
-  rateLimit:   { searchesLeft: number | null; planName: string };
-  fetchedAt:   string;
+  query:          string;
+  ourPrice:       number | null;
+  ourBasePrice:   number | null;
+  targetCurrency: string;
+  exchangeRate:   number;
+  competitors:    Competitor[];
+  summary:        Summary;
+  rateLimit:      { searchesLeft: number | null; planName: string };
+  fetchedAt:      string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
+const formatCurrency = (n: number, currency: string = 'USD') => {
+  try {
+    return new Intl.NumberFormat('es-CL', { 
+      style: 'currency', 
+      currency, 
+      maximumFractionDigits: ['CLP', 'COP', 'ARS'].includes(currency) ? 0 : 2 
+    }).format(n);
+  } catch (e) {
+    return `$${n}`;
+  }
+};
 
 const COUNTRY_OPTIONS = [
   { label: 'EE.UU.',    value: 'us' },
@@ -69,7 +90,75 @@ export default function CompetitividadPage() {
   const [error, setError]               = useState<string | null>(null);
   const [searchesLeft, setSearchesLeft] = useState<number | null>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  // Autocomplete State
+  const [suggestions, setSuggestions]         = useState<{id: string; title: string; price: number}[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchTimeout, setSearchTimeout]     = useState<NodeJS.Timeout | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  // Save State
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  // Top Products State
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [loadingTop, setLoadingTop] = useState(true);
+
+  useEffect(() => { 
+    setMounted(true); 
+    fetchTopProducts();
+  }, []);
+
+  const fetchTopProducts = async () => {
+    try {
+      setLoadingTop(true);
+      const res = await fetch('/api/inteligencia-mercado/top-20');
+      const json = await res.json();
+      if (json.success) {
+        setTopProducts(json.data);
+      }
+    } catch (e) {
+      console.error('Error fetching top 20', e);
+    } finally {
+      setLoadingTop(false);
+    }
+  };
+
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    if (!val.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/productos/search?q=${encodeURIComponent(val)}`);
+        const json = await res.json();
+        if (json.success && json.data.length > 0) {
+          setSuggestions(json.data);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 400);
+    
+    setSearchTimeout(timeout);
+  };
+
+  const selectSuggestion = (suggestion: {id: string; title: string; price: number}) => {
+    setQuery(suggestion.title);
+    setOurPrice(suggestion.price.toString());
+    setSelectedProductId(suggestion.id);
+    setShowSuggestions(false);
+  };
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -79,6 +168,7 @@ export default function CompetitividadPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setSaveMessage(null);
 
     try {
       const params = new URLSearchParams({ q, country });
@@ -94,6 +184,36 @@ export default function CompetitividadPage() {
       setError(err.message ?? 'Error desconocido');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    try {
+      setIsSaving(true);
+      setSaveMessage(null);
+      const res = await fetch('/api/inteligencia-mercado/competitividad/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: selectedProductId,
+          title: result.query,
+          ourPrice: result.ourPrice,
+          keyword: result.query,
+          competitors: result.competitors
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSaveMessage({ type: 'success', text: 'Resultados guardados exitosamente en BigQuery.' });
+        fetchTopProducts();
+      } else {
+        throw new Error(json.error);
+      }
+    } catch (e: any) {
+      setSaveMessage({ type: 'error', text: e.message || 'Error al guardar' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -132,10 +252,27 @@ export default function CompetitividadPage() {
             <input
               type="text"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => handleQueryChange(e.target.value)}
+              onFocus={() => { if(suggestions.length > 0) setShowSuggestions(true); }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               placeholder='ej. "iPhone 15 128GB" o "Xiaomi Redmi Note 13"'
               className="w-full bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
             />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => selectSuggestion(s)}
+                    className="w-full text-left px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-white/5 last:border-0 flex justify-between items-center"
+                  >
+                    <span className="text-sm text-white truncate pr-4">{s.title}</span>
+                    <span className="text-xs font-mono text-zinc-400 bg-zinc-950 px-2 py-1 rounded-md shrink-0">USD ${s.price}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <input
             type="number"
@@ -182,21 +319,21 @@ export default function CompetitividadPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
                 label="Precio más bajo"
-                value={result.summary.lowestCompetitor ? fmt(result.summary.lowestCompetitor) : '—'}
+                value={result.summary.lowestCompetitor ? formatCurrency(result.summary.lowestCompetitor, result.targetCurrency) : '—'}
                 sub="Competidor más barato"
                 color={result.summary.lowestCompetitor && result.ourPrice! <= result.summary.lowestCompetitor ? 'emerald' : 'rose'}
                 icon={TrendingDown}
               />
               <KpiCard
                 label="Precio promedio"
-                value={result.summary.avgCompetitor ? fmt(result.summary.avgCompetitor) : '—'}
+                value={result.summary.avgCompetitor ? formatCurrency(result.summary.avgCompetitor, result.targetCurrency) : '—'}
                 sub="Media de la competencia"
                 color="blue"
                 icon={ShieldCheck}
               />
               <KpiCard
                 label="Precio más alto"
-                value={result.summary.highestCompetitor ? fmt(result.summary.highestCompetitor) : '—'}
+                value={result.summary.highestCompetitor ? formatCurrency(result.summary.highestCompetitor, result.targetCurrency) : '—'}
                 sub="Competidor más caro"
                 color="amber"
                 icon={TrendingUp}
@@ -217,6 +354,9 @@ export default function CompetitividadPage() {
               ourPrice={result.ourPrice!}
               avgCompetitor={result.summary.avgCompetitor}
               lowestCompetitor={result.summary.lowestCompetitor}
+              targetCurrency={result.targetCurrency}
+              exchangeRate={result.exchangeRate}
+              ourBasePrice={result.ourBasePrice!}
             />
           )}
 
@@ -227,10 +367,28 @@ export default function CompetitividadPage() {
                 <h2 className="text-lg font-bold text-white">Resultados Google Shopping</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {result.competitors.length} resultados · <span className="text-zinc-300">"{result.query}"</span>
-                  {result.ourPrice ? ` · Nuestro precio: ${fmt(result.ourPrice)}` : ''}
+                  {result.ourPrice ? ` · Nuestro precio: ${formatCurrency(result.ourPrice, result.targetCurrency)}` : ''}
                 </p>
               </div>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                <Save className={cn("w-4 h-4", isSaving && "animate-pulse")} />
+                {isSaving ? 'Guardando...' : 'Guardar Resultados'}
+              </button>
             </div>
+
+            {saveMessage && (
+              <div className={cn(
+                "mb-4 p-3 rounded-xl border text-sm flex items-center gap-2",
+                saveMessage.type === 'success' ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+              )}>
+                {saveMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {saveMessage.text}
+              </div>
+            )}
             <div className="space-y-3">
               {result.competitors.map((c, i) => (
                 <CompetitorRow key={i} competitor={c} ourPrice={result.ourPrice} rank={i + 1} />
@@ -250,14 +408,77 @@ export default function CompetitividadPage() {
           </p>
         </div>
       )}
+
+      {/* Top 20 Section */}
+      <div className="pt-8 border-t border-white/10">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <Trophy className="w-5 h-5 text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Top 20 Productos Más Vendidos</h2>
+            <p className="text-sm text-zinc-400 mt-0.5">Basado en ventas de los últimos 30 días, comparado con el precio promedio de mercado guardado.</p>
+          </div>
+        </div>
+
+        {loadingTop ? (
+          <div className="flex justify-center p-12">
+            <RefreshCw className="w-6 h-6 text-zinc-500 animate-spin" />
+          </div>
+        ) : topProducts.length === 0 ? (
+          <div className="text-center p-8 bg-zinc-950/50 rounded-3xl border border-white/10">
+            <p className="text-zinc-500 text-sm">No hay datos suficientes de los últimos 30 días.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {topProducts.map((p, i) => {
+               const hasPricing = p.our_price && p.avg_competitor_price;
+               const diffPct = hasPricing ? Math.round(((p.our_price! - p.avg_competitor_price!) / p.avg_competitor_price!) * 100) : null;
+               const isCheaper = diffPct !== null && diffPct <= 0;
+               return (
+                <div key={p.id} className="p-4 rounded-2xl border border-white/5 bg-zinc-900/30 hover:bg-zinc-900/60 transition-colors flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-xs font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded-md">#{i + 1}</span>
+                      <span className="text-xs font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">{p.total_sold} vendidos</span>
+                    </div>
+                    <p className="text-sm font-medium text-white line-clamp-2 leading-snug">{p.title}</p>
+                  </div>
+                  
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Nuestro Precio:</span>
+                      <span className="text-zinc-300 font-medium">{p.our_price ? formatCurrency(p.our_price, 'USD') : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-500">Promedio Mercado:</span>
+                      <span className="text-zinc-300 font-medium">{p.avg_competitor_price ? formatCurrency(p.avg_competitor_price, 'USD') : '—'}</span>
+                    </div>
+                    {diffPct !== null && (
+                      <div className={cn("mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-xs font-medium", isCheaper ? "text-emerald-400" : "text-rose-400")}>
+                        <span>Competitividad</span>
+                        <span className="flex items-center gap-1">
+                          {isCheaper ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                          {Math.abs(diffPct)}% {isCheaper ? 'más barato' : 'más caro'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+               );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PriceBanner({ ourPrice, avgCompetitor, lowestCompetitor }: {
+function PriceBanner({ ourPrice, avgCompetitor, lowestCompetitor, targetCurrency, exchangeRate, ourBasePrice }: {
   ourPrice: number; avgCompetitor: number; lowestCompetitor: number | null;
+  targetCurrency?: string; exchangeRate?: number; ourBasePrice?: number;
 }) {
   const vsAvgPct = Math.round(((ourPrice - avgCompetitor) / avgCompetitor) * 100);
   const cheaper  = ourPrice < avgCompetitor;
@@ -279,12 +500,19 @@ function PriceBanner({ ourPrice, avgCompetitor, lowestCompetitor }: {
             ? `Eres ${Math.abs(vsAvgPct)}% más barato que el promedio`
             : `Eres ${Math.abs(vsAvgPct)}% más caro que el promedio`}
         </p>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          Precio promedio competencia: {fmt(avgCompetitor)}
-          {vsLowest !== null && (vsLowest
-            ? ' · Eres el más barato del mercado 🎯'
-            : ` · El más barato es ${fmt(lowestCompetitor!)}`)}
-        </p>
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          <p className="text-xs text-zinc-500">
+            Precio promedio competencia: {formatCurrency(avgCompetitor, targetCurrency || 'USD')}
+            {vsLowest !== null && (vsLowest
+              ? ' · Eres el más barato del mercado 🎯'
+              : ` · El más barato es ${formatCurrency(lowestCompetitor!, targetCurrency || 'USD')}`)}
+          </p>
+          {targetCurrency && targetCurrency !== 'USD' && (
+            <p className="text-[10px] text-zinc-600 flex items-center gap-1">
+              Conversión activa: USD ${ourBasePrice} × {exchangeRate} = {formatCurrency(ourPrice, targetCurrency)}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

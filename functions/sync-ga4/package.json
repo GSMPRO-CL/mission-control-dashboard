@@ -1,0 +1,14 @@
+{
+  "name": "sync-ga4",
+  "version": "1.0.0",
+  "description": "Google Analytics 4 to BigQuery Data Ingestion",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@google-analytics/data": "^4.10.0",
+    "@google-cloud/bigquery": "^7.9.0",
+    "dotenv": "^16.4.7"
+  }
+}
