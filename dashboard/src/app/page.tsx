@@ -1,203 +1,249 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
-import { DollarSign, ShoppingBag, Activity, Calendar, Mail } from "lucide-react";
-import { motion, Variants } from 'framer-motion';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { 
+  DollarSign, 
+  ShoppingCart, 
+  MousePointerClick, 
+  Users, 
+  Star, 
+  HeadphonesIcon,
+  CalendarDays,
+  Mail,
+  Activity,
+  CheckCircle2
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 
-const containerVariants: Variants = {
+import { KpiCard } from '@/components/ui/KpiCard';
+import { MiniAreaChart } from '@/components/ui/MiniAreaChart';
+import { MiniList } from '@/components/ui/MiniList';
+
+const containerVariants = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
 };
 
-const itemVariants: Variants = {
+const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
 };
 
-export default function Home() {
-  const [startDate, setStartDate] = useState('2026-04-01T00:00:00Z');
-  const [endDate, setEndDate] = useState('2026-04-30T23:59:59Z');
-  
-  const [shopifyData, setShopifyData] = useState<any>(null);
-  const [klaviyoData, setKlaviyoData] = useState<any>(null);
-  const [crispData, setCrispData] = useState<any>(null);
+export default function GeneralDashboard() {
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Selector de fechas Global (MTD por defecto)
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
+
   useEffect(() => {
-    async function fetchData() {
+    async function fetchOverview() {
       setLoading(true);
       try {
-        const [shopRes, klavRes, crispRes] = await Promise.all([
-          fetch(`/api/kpis/shopify?startDate=${startDate}&endDate=${endDate}`),
-          fetch(`/api/kpis/klaviyo?startDate=${startDate}&endDate=${endDate}`),
-          fetch(`/api/kpis/crisp?startDate=${startDate}&endDate=${endDate}`)
-        ]);
-        
-        setShopifyData(await shopRes.json());
-        setKlaviyoData(await klavRes.json());
-        setCrispData(await crispRes.json());
+        const res = await fetch(`/api/overview?startDate=${startDate}T00:00:00Z&endDate=${endDate}T23:59:59Z`);
+        const json = await res.json();
+        if (json.success) {
+          setData(json.data);
+        }
       } catch (err) {
-        console.error("Error fetching data:", err);
+        console.error("Error fetching overview data", err);
       } finally {
         setLoading(false);
       }
     }
-    fetchData();
+    fetchOverview();
   }, [startDate, endDate]);
 
-  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const month = e.target.value;
-    if (month === '04') {
-      setStartDate('2026-04-01T00:00:00Z');
-      setEndDate('2026-04-30T23:59:59Z');
-    } else if (month === '03') {
-      setStartDate('2026-03-01T00:00:00Z');
-      setEndDate('2026-03-31T23:59:59Z');
-    } else if (month === '02') {
-      setStartDate('2026-02-01T00:00:00Z');
-      setEndDate('2026-02-28T23:59:59Z');
-    } else if (month === '01') {
-      setStartDate('2026-01-01T00:00:00Z');
-      setEndDate('2026-01-31T23:59:59Z');
-    } else if (month === 'all') {
-      setStartDate('2026-01-01T00:00:00Z');
-      setEndDate('2026-12-31T23:59:59Z');
-    }
+  const formatCurrency = (val: number, currency: string = 'USD') => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(val);
   };
 
-  const formatCurrency = (value: number, currency: string) => {
-    return new Intl.NumberFormat('es-CL', { 
-      style: 'currency', 
-      currency: currency || 'CLP',
-      maximumFractionDigits: 0
-    }).format(value);
+  const formatNumber = (val: number) => {
+    return new Intl.NumberFormat('en-US').format(val);
   };
 
   return (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
-      className="space-y-8"
-    >
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+      
+      {/* Header & Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Resumen Global</h2>
-          <p className="text-zinc-400 mt-1">Métricas principales de E-commerce</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Command Center</h1>
+          <p className="text-zinc-400 mt-1 text-sm">Resumen global de operaciones y rendimiento del negocio.</p>
         </div>
-        
-        <div className="flex items-center gap-2 bg-white/5 hover:bg-white/10 transition-colors border border-white/10 p-2 rounded-2xl cursor-pointer">
-          <Calendar className="w-4 h-4 text-zinc-400 ml-2" />
-          <select 
-            onChange={handleMonthChange}
-            defaultValue="04"
-            className="bg-transparent text-sm font-medium text-white px-2 py-1 outline-none cursor-pointer appearance-none"
-          >
-            <option value="all" className="bg-zinc-900">Todo el año (2026)</option>
-            <option value="04" className="bg-zinc-900">Abril 2026</option>
-            <option value="03" className="bg-zinc-900">Marzo 2026</option>
-            <option value="02" className="bg-zinc-900">Febrero 2026</option>
-            <option value="01" className="bg-zinc-900">Enero 2026</option>
-          </select>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-zinc-900/50 border border-white/10 p-1.5 rounded-xl backdrop-blur-md">
+            <CalendarDays className="w-4 h-4 text-zinc-400 ml-2" />
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent text-sm text-white focus:outline-none px-2 [color-scheme:dark]"
+            />
+            <span className="text-zinc-500">-</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent text-sm text-white focus:outline-none px-2 [color-scheme:dark]"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Discreet Banner */}
+      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-center justify-center text-sm shadow-inner">
+        <Activity className="w-4 h-4 text-blue-400 mr-2" />
+        <span className="text-blue-200 font-medium">El ecosistema de datos está unificado.</span>
+        <span className="text-zinc-400 ml-2 hidden md:inline">Explora los módulos laterales para obtener detalles operativos.</span>
+      </div>
+
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="space-y-6"
+      >
+        {/* ROW 1: Main KPIs (4 columns) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <motion.div variants={itemVariants}>
+            <KpiCard 
+              title="Ventas Netas" 
+              value={data ? formatCurrency(data.ventas.netSales, data.ventas.currency) : '$0'}
+              icon={DollarSign}
+              color="blue"
+              loading={loading}
+              subtitle="Shopify"
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <KpiCard 
+              title="Órdenes Totales" 
+              value={data ? formatNumber(data.ventas.totalOrders) : '0'}
+              icon={ShoppingCart}
+              color="purple"
+              loading={loading}
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <KpiCard 
+              title="Sesiones" 
+              value={data ? formatNumber(data.trafico.totalSessions) : '0'}
+              icon={Users}
+              color="cyan"
+              loading={loading}
+              subtitle="Tráfico"
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <KpiCard 
+              title="Conversion Rate" 
+              value={data ? `${data.trafico.avgConversionRate.toFixed(2)}%` : '0%'}
+              icon={MousePointerClick}
+              color="emerald"
+              loading={loading}
+              subtitle="CVR"
+            />
+          </motion.div>
+        </div>
+
+        {/* ROW 2: Trend Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[320px]">
+          <motion.div variants={itemVariants} className="h-full">
+            <MiniAreaChart 
+              title="Evolución de Ventas"
+              subtitle="Ventas netas pagadas por día"
+              loading={loading}
+              data={data?.ventas?.trend || []}
+              dataKeys={[{ key: 'netSales', name: 'Ventas Netas', color: '#3b82f6' }]}
+              xAxisKey="date"
+              yAxisFormatter={(val) => `$${(val/1000).toFixed(1)}k`}
+            />
+          </motion.div>
+          <motion.div variants={itemVariants} className="h-full">
+            <MiniAreaChart 
+              title="Tendencia de Tráfico"
+              subtitle="Sesiones vs Visitantes Únicos"
+              loading={loading}
+              data={data?.trafico?.trend || []}
+              dataKeys={[
+                { key: 'sessions', name: 'Sesiones', color: '#06b6d4' },
+                { key: 'visitors', name: 'Visitantes', color: '#8b5cf6' }
+              ]}
+              xAxisKey="date"
+              yAxisFormatter={(val) => `${(val/1000).toFixed(1)}k`}
+            />
+          </motion.div>
+        </div>
+
+        {/* ROW 3: Secondary Modules (3 columns) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sub-grid 2x2 for secondary KPIs */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.div variants={itemVariants}>
+              <KpiCard 
+                title="Revenue Email Marketing" 
+                value={data ? formatCurrency(data.marketing.emailRevenue) : '$0'}
+                icon={Mail}
+                color="rose"
+                loading={loading}
+                subtitle={`Klaviyo - ${data?.marketing?.emailOrders || 0} órdenes`}
+              />
+            </motion.div>
+            <motion.div variants={itemVariants}>
+              <KpiCard 
+                title="Tasa de Resolución" 
+                value={data ? `${data.soporte.resolutionRate.toFixed(1)}%` : '0%'}
+                icon={CheckCircle2}
+                color="emerald"
+                loading={loading}
+                subtitle={`${data?.soporte?.resolvedConversations || 0} de ${data?.soporte?.totalConversations || 0} resueltos`}
+              />
+            </motion.div>
+            <motion.div variants={itemVariants}>
+              <KpiCard 
+                title="CSAT (Soporte)" 
+                value={data ? `${data.soporte.avgCsat}/5` : '0/5'}
+                icon={HeadphonesIcon}
+                color="amber"
+                loading={loading}
+                subtitle="Crisp"
+              />
+            </motion.div>
+            <motion.div variants={itemVariants}>
+              <KpiCard 
+                title="Rating (Reviews)" 
+                value={data ? `${data.reviews.averageRating} ⭐` : '0 ⭐'}
+                icon={Star}
+                color="orange"
+                loading={loading}
+                subtitle="Yotpo"
+              />
+            </motion.div>
+          </div>
+          
+          {/* List for Activity */}
+          <motion.div variants={itemVariants} className="h-full">
+            <MiniList 
+              title="Actividad del Equipo"
+              icon={Activity}
+              loading={loading}
+              items={data?.equipo?.topStaff?.map((s: any) => ({
+                label: s.name,
+                sublabel: 'Eventos registrados',
+                value: s.events
+              })) || []}
+            />
+          </motion.div>
         </div>
       </motion.div>
-
-      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        
-        {/* Ventas */}
-        <div className="glass-card flex flex-col gap-5 group">
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl border border-blue-500/20 group-hover:scale-110 transition-transform duration-300">
-              <DollarSign className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
-            </div>
-          </div>
-          <div>
-            <h3 className="text-zinc-400 font-medium text-sm">Ventas Netas (Pagadas)</h3>
-            <div className="mt-2 h-10">
-              {loading ? (
-                <Skeleton className="h-9 w-32" />
-              ) : (
-                <p className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 tracking-tight">
-                  {shopifyData ? formatCurrency(shopifyData.netSales, shopifyData.currency) : "$0"}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Órdenes */}
-        <div className="glass-card flex flex-col gap-5 group">
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl border border-purple-500/20 group-hover:scale-110 transition-transform duration-300">
-              <ShoppingBag className="w-5 h-5 text-purple-400 drop-shadow-[0_0_8px_rgba(192,132,252,0.5)]" />
-            </div>
-          </div>
-          <div>
-            <h3 className="text-zinc-400 font-medium text-sm">Órdenes Totales</h3>
-            <div className="mt-2 h-10">
-              {loading ? (
-                <Skeleton className="h-9 w-24" />
-              ) : (
-                <p className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 tracking-tight">
-                  {shopifyData?.totalOrders || "0"}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Marketing (Klaviyo) */}
-        <div className="glass-card flex flex-col gap-5 group">
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-xl border border-orange-500/20 group-hover:scale-110 transition-transform duration-300">
-              <Mail className="w-5 h-5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-            </div>
-          </div>
-          <div>
-            <h3 className="text-zinc-400 font-medium text-sm">Emails Abiertos</h3>
-            <div className="mt-2 h-10">
-              {loading ? (
-                <Skeleton className="h-9 w-28" />
-              ) : (
-                <p className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 tracking-tight">
-                  {klaviyoData?.openedCount || "0"}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Crisp / Support */}
-        <div className="glass-card flex flex-col gap-5 group">
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-xl border border-emerald-500/20 group-hover:scale-110 transition-transform duration-300">
-              <Activity className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-            </div>
-          </div>
-          <div>
-            <h3 className="text-zinc-400 font-medium text-sm">Satisfacción (CSAT)</h3>
-            <div className="mt-2 h-10">
-              {loading ? (
-                <Skeleton className="h-9 w-20" />
-              ) : (
-                <p className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-400 tracking-tight">
-                  {crispData?.avgCsat > 0 ? `${crispData.avgCsat}/5` : "N/A"}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-      </motion.div>
-
-      {/* Overview Chart Container */}
-      <motion.div variants={itemVariants} className="glass-card p-8 mt-6">
-         <h3 className="text-xl font-bold text-white mb-6 tracking-tight">Módulo General Activo</h3>
-         <div className="h-72 flex items-center justify-center border border-dashed border-white/10 rounded-2xl bg-black/20">
-           <p className="text-zinc-500 font-medium">Los datos reales están siendo inyectados exitosamente desde BigQuery.</p>
-         </div>
-      </motion.div>
-    </motion.div>
+    </div>
   );
 }
