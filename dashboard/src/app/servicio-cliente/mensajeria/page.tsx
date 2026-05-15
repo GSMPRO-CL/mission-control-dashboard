@@ -72,7 +72,8 @@ interface DuplicityDetail {
   channels_used: string[];
   distinct_channels: number;
   first_contact: string;
-  last_contact: string;
+  second_channel_contact: string;
+  hours_to_second_channel: number;
   latest_session_id: string;
 }
 
@@ -459,7 +460,7 @@ export default function SupportPage() {
                   <tr>
                     <th className="px-4 py-3 rounded-tl-lg">Usuario</th>
                     <th className="px-4 py-3">Canales</th>
-                    <th className="px-4 py-3 text-right">Último Contacto</th>
+                    <th className="px-4 py-3 text-right">Duración (Salto)</th>
                     <th className="px-4 py-3 text-right rounded-tr-lg">Acción</th>
                   </tr>
                 </thead>
@@ -476,22 +477,25 @@ export default function SupportPage() {
                         <div className="flex gap-1 flex-wrap">
                           {detail.channels_used.map(ch => {
                             let color = "bg-zinc-500/20 text-zinc-400 border-zinc-500/30";
-                            if (ch === 'chat') color = "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
-                            if (ch === 'email') color = "bg-blue-500/20 text-blue-400 border-blue-500/30";
-                            if (ch === 'whatsapp') color = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-                            if (ch === 'instagram') color = "bg-pink-500/20 text-pink-400 border-pink-500/30";
-                            if (ch === 'facebook') color = "bg-blue-600/20 text-blue-500 border-blue-600/30";
+                            let name = ch.charAt(0).toUpperCase() + ch.slice(1);
+                            
+                            if (ch === 'chat') { color = "bg-cyan-500/20 text-cyan-400 border-cyan-500/30"; name = 'Chat Web'; }
+                            else if (ch === 'email') { color = "bg-blue-500/20 text-blue-400 border-blue-500/30"; name = 'Correo'; }
+                            else if (ch === 'whatsapp') { color = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"; name = 'WhatsApp'; }
+                            else if (ch === 'instagram') { color = "bg-pink-500/20 text-pink-400 border-pink-500/30"; name = 'Instagram'; }
+                            else if (ch === 'facebook' || ch === 'messenger') { color = "bg-blue-600/20 text-blue-500 border-blue-600/30"; name = ch === 'facebook' ? 'Facebook' : 'Messenger'; }
+                            else if (ch === 'telegram') { color = "bg-sky-500/20 text-sky-400 border-sky-500/30"; name = 'Telegram'; }
                             
                             return (
                               <span key={ch} className={cn("text-[10px] px-2 py-0.5 rounded-full border", color)}>
-                                {ch}
+                                {name}
                               </span>
                             );
                           })}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-400 text-xs">
-                        {new Date(detail.last_contact).toLocaleString('es', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}
+                      <td className="px-4 py-3 text-right text-zinc-400 text-xs font-mono">
+                        {detail.hours_to_second_channel}h
                       </td>
                       <td className="px-4 py-3 text-right">
                         <a 

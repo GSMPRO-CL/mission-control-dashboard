@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
     if (startDate && endDate) {
       dateFilterTable = 'AND created_at >= @startDate AND created_at <= @endDate';
-      dateFilterView = 'WHERE first_contact >= @startDate AND last_contact <= @endDate';
+      dateFilterView = 'WHERE first_contact >= @startDate AND second_channel_contact <= @endDate';
       params.startDate = startDate;
       params.endDate = endDate;
     }
@@ -45,11 +45,12 @@ export async function GET(request: Request) {
         channels_used,
         distinct_channels,
         first_contact,
-        last_contact,
+        second_channel_contact,
+        hours_to_second_channel,
         latest_session_id
       FROM \`${projectId}.${DATASET_ID}.v_crisp_omnichannel_duplicity\`
       ${dateFilterView}
-      ORDER BY distinct_channels DESC, last_contact DESC
+      ORDER BY distinct_channels DESC, second_channel_contact DESC
       LIMIT 50
     `;
 
