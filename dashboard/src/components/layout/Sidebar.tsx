@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
     name: 'Ventas', 
     icon: ShoppingCart,
     subItems: [
+      { name: 'Resumen', href: '/ventas' },
       { name: 'Indicadores (KPIs)', href: '/ventas/kpis' },
       { name: 'Análisis de Productos', href: '/ventas/productos' },
     ]
