@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agent import get_latest_electronic_releases
 from calendar_agent import get_upcoming_commercial_calendar_events
 from bq_matcher import check_products_in_bq
+from seo_inspector import analyze_seo
 from dotenv import load_dotenv
 
 # Cargar variables de entorno (como GCP_PROJECT_ID)
@@ -126,6 +127,16 @@ def run_calendar_scan():
     except Exception as e:
         print(f"Error en el flujo de calendario: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor procesando calendario.")
+
+@app.post("/api/v1/seo/analyze")
+async def run_seo_analysis(payload: dict):
+    try:
+        # payload expected: { product: {...}, queries: [...], benchmark: {...}, selected_metric: "..." }
+        analysis_result = analyze_seo(payload)
+        return {"status": "success", "analysis": analysis_result}
+    except Exception as e:
+        print(f"Error en el análisis SEO: {e}")
+        raise HTTPException(status_code=500, detail="Error analizando métricas SEO")
 
 if __name__ == "__main__":
     import uvicorn

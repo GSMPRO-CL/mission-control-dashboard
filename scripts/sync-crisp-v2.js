@@ -145,7 +145,7 @@ function resolveStatus(stateObj, statusInt) {
 }
 
 function normalizeChannelOrigin(originStr) {
-  if (!originStr) return 'chat';
+  if (!originStr) return null;
   if (originStr === 'chat' || originStr === 'email') return originStr;
   
   // Format is usually urn:crisp.im:whatsapp:0

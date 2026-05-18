@@ -23,15 +23,27 @@ export async function GET(request: Request) {
     
     const kpiQuery = `
       SELECT
-        (SELECT COUNT(DISTINCT people_id) 
+        (SELECT COUNT(DISTINCT COALESCE(
+           people_id,
+           CASE WHEN visitor_email IS NOT NULL AND visitor_email != '' AND visitor_email != 'user@example.com' 
+                THEN CONCAT('email:', visitor_email) END,
+           CASE WHEN visitor_phone IS NOT NULL AND visitor_phone != '' 
+                THEN CONCAT('phone:', visitor_phone) END
+         )) 
          FROM \`${projectId}.${DATASET_ID}.crisp_conversations\` 
-         WHERE people_id IS NOT NULL ${dateFilterTable}
+         WHERE channel_origin IS NOT NULL ${dateFilterTable.replace('WHERE', 'AND')}
         ) AS total_identified_users,
         COUNT(*) AS duplicated_users,
         SAFE_DIVIDE(COUNT(*), 
-          (SELECT COUNT(DISTINCT people_id) 
+          (SELECT COUNT(DISTINCT COALESCE(
+             people_id,
+             CASE WHEN visitor_email IS NOT NULL AND visitor_email != '' AND visitor_email != 'user@example.com' 
+                  THEN CONCAT('email:', visitor_email) END,
+             CASE WHEN visitor_phone IS NOT NULL AND visitor_phone != '' 
+                  THEN CONCAT('phone:', visitor_phone) END
+           )) 
            FROM \`${projectId}.${DATASET_ID}.crisp_conversations\` 
-           WHERE people_id IS NOT NULL ${dateFilterTable})
+           WHERE channel_origin IS NOT NULL ${dateFilterTable})
         ) * 100 AS duplicity_rate_pct
       FROM \`${projectId}.${DATASET_ID}.v_crisp_omnichannel_duplicity\`
       ${dateFilterView}
