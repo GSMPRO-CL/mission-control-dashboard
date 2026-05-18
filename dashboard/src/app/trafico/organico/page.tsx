@@ -7,7 +7,9 @@ import {
   MousePointerClick,
   Eye,
   Percent,
-  Search
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -19,6 +21,7 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { cn } from '@/lib/utils';
+import { ProductSeoSection } from './ProductSeoSection';
 
 interface KpiMetrics {
   clicks: number;
@@ -68,12 +71,19 @@ export default function TraficoOrganicoPage() {
   const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
 
+  // Pagination states
+  const [queriesPage, setQueriesPage] = useState(1);
+  const [pagesPage, setPagesPage] = useState(1);
+  const itemsPerPage = 10;
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
+    setQueriesPage(1);
+    setPagesPage(1);
     try {
       const res = await fetch(`/api/trafico/organico?startDate=${startDate}&endDate=${endDate}`);
       const json = await res.json();
@@ -293,30 +303,56 @@ export default function TraficoOrganicoPage() {
                 <div className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
               </div>
             ) : data && data.topQueries && data.topQueries.length > 0 ? (
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50">
-                  <tr>
-                    <th className="px-4 py-3 rounded-tl-lg">Keyword</th>
-                    <th className="px-4 py-3 text-right">Clics</th>
-                    <th className="px-4 py-3 text-right">Impresiones</th>
-                    <th className="px-4 py-3 text-right">Pos.</th>
-                    <th className="px-4 py-3 text-right rounded-tr-lg">CTR</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topQueries.slice(0, 50).map((q, i) => (
-                    <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3 font-medium text-blue-400 truncate max-w-[200px]" title={q.query}>
-                        {q.query}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-white">{formatNumber(q.clicks)}</td>
-                      <td className="px-4 py-3 text-right text-zinc-400">{formatNumber(q.impressions)}</td>
-                      <td className="px-4 py-3 text-right text-purple-400">{formatPos(q.position)}</td>
-                      <td className="px-4 py-3 text-right text-amber-400">{formatPercent(q.ctr)}</td>
+              <>
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50">
+                    <tr>
+                      <th className="px-4 py-3 rounded-tl-lg">Keyword</th>
+                      <th className="px-4 py-3 text-right">Clics</th>
+                      <th className="px-4 py-3 text-right">Impresiones</th>
+                      <th className="px-4 py-3 text-right">Pos.</th>
+                      <th className="px-4 py-3 text-right rounded-tr-lg">CTR</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.topQueries.slice((queriesPage - 1) * itemsPerPage, queriesPage * itemsPerPage).map((q, i) => (
+                      <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3 font-medium text-blue-400 truncate max-w-[200px]" title={q.query}>
+                          {q.query}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-white">{formatNumber(q.clicks)}</td>
+                        <td className="px-4 py-3 text-right text-zinc-400">{formatNumber(q.impressions)}</td>
+                        <td className="px-4 py-3 text-right text-purple-400">{formatPos(q.position)}</td>
+                        <td className="px-4 py-3 text-right text-amber-400">{formatPercent(q.ctr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-4 px-2">
+                  <span className="text-xs text-zinc-500">
+                    Mostrando {(queriesPage - 1) * itemsPerPage + 1} a {Math.min(queriesPage * itemsPerPage, data.topQueries.length)} de {data.topQueries.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setQueriesPage(prev => Math.max(1, prev - 1))}
+                      disabled={queriesPage === 1}
+                      className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs text-zinc-400">
+                      Página {queriesPage} de {Math.ceil(data.topQueries.length / itemsPerPage)}
+                    </span>
+                    <button 
+                      onClick={() => setQueriesPage(prev => Math.min(Math.ceil(data.topQueries.length / itemsPerPage), prev + 1))}
+                      disabled={queriesPage === Math.ceil(data.topQueries.length / itemsPerPage)}
+                      className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="w-full h-48 flex items-center justify-center text-zinc-500">No hay datos</div>
             )}
@@ -332,29 +368,55 @@ export default function TraficoOrganicoPage() {
                 <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
               </div>
             ) : data && data.topPages && data.topPages.length > 0 ? (
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50">
-                  <tr>
-                    <th className="px-4 py-3 rounded-tl-lg">URL</th>
-                    <th className="px-4 py-3 text-right">Clics</th>
-                    <th className="px-4 py-3 text-right">Pos.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topPages.slice(0, 50).map((p, i) => {
-                    const shortUrl = p.page.replace('https://gsmpro.cl', '').replace('https://www.gsmpro.cl', '');
-                    return (
-                      <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-4 py-3 font-medium text-zinc-200 truncate max-w-[280px]" title={p.page}>
-                          {shortUrl}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-white">{formatNumber(p.clicks)}</td>
-                        <td className="px-4 py-3 text-right text-purple-400">{formatPos(p.position)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <>
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50">
+                    <tr>
+                      <th className="px-4 py-3 rounded-tl-lg">URL</th>
+                      <th className="px-4 py-3 text-right">Clics</th>
+                      <th className="px-4 py-3 text-right">Pos.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topPages.slice((pagesPage - 1) * itemsPerPage, pagesPage * itemsPerPage).map((p, i) => {
+                      const shortUrl = p.page.replace('https://gsmpro.cl', '').replace('https://www.gsmpro.cl', '');
+                      return (
+                        <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-4 py-3 font-medium text-zinc-200 truncate max-w-[280px]" title={p.page}>
+                            {shortUrl}
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-white">{formatNumber(p.clicks)}</td>
+                          <td className="px-4 py-3 text-right text-purple-400">{formatPos(p.position)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-4 px-2">
+                  <span className="text-xs text-zinc-500">
+                    Mostrando {(pagesPage - 1) * itemsPerPage + 1} a {Math.min(pagesPage * itemsPerPage, data.topPages.length)} de {data.topPages.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setPagesPage(prev => Math.max(1, prev - 1))}
+                      disabled={pagesPage === 1}
+                      className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs text-zinc-400">
+                      Página {pagesPage} de {Math.ceil(data.topPages.length / itemsPerPage)}
+                    </span>
+                    <button 
+                      onClick={() => setPagesPage(prev => Math.min(Math.ceil(data.topPages.length / itemsPerPage), prev + 1))}
+                      disabled={pagesPage === Math.ceil(data.topPages.length / itemsPerPage)}
+                      className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="w-full h-48 flex items-center justify-center text-zinc-500">No hay datos</div>
             )}
@@ -362,6 +424,10 @@ export default function TraficoOrganicoPage() {
         </div>
 
       </div>
+
+      {/* SEO por Producto e Inspector AI */}
+      <ProductSeoSection startDate={startDate} endDate={endDate} />
+
     </div>
   );
 }
