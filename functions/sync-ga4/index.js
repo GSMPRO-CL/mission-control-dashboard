@@ -1,12 +1,13 @@
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const { BigQuery } = require('@google-cloud/bigquery');
+const { OAuth2Client } = require('google-auth-library');
 
 // Configuración
 const DATASET_ID = 'ecommerce_data';
 const TABLE_ID = 'raw_traffic_ga4';
 
-// Por defecto extraemos los últimos 30 días, o histórico completo si está vacío
-const START_DATE = '2026-01-01'; // Ajustado para el historial de nuestro sistema
+// Fecha de inicio por defecto (si la tabla está vacía)
+const FALLBACK_START_DATE = '2026-01-01';
 const END_DATE = 'today';
 
 async function setupBigQuery(bq, projectId) {
@@ -43,27 +44,57 @@ async function setupBigQuery(bq, projectId) {
     console.log(`✅ Tabla ${TABLE_ID} creada exitosamente.`);
   }
   
-  // Limpiamos la tabla para carga idempotente
-  console.log(`Limpiando tabla ${TABLE_ID} para carga idempotente...`);
-  try {
-    await bq.query(`TRUNCATE TABLE \`${projectId}.${DATASET_ID}.${TABLE_ID}\``);
-  } catch(e) {
-    console.log("Aviso en TRUNCATE:", e.message);
-  }
-
   return table;
 }
 
-async function fetchGA4Data(propertyId) {
+async function getSyncStartDateAndClean(bq, projectId) {
+  let maxDateStr = null;
+  try {
+    const query = `SELECT MAX(date) as max_date FROM \`${projectId}.${DATASET_ID}.${TABLE_ID}\``;
+    const [rows] = await bq.query(query);
+    if (rows && rows.length > 0 && rows[0].max_date) {
+      maxDateStr = rows[0].max_date.value || rows[0].max_date;
+    }
+  } catch(e) {
+    console.log("La tabla podría estar vacía o no existe aún.");
+  }
+
+  let startDate = FALLBACK_START_DATE;
+  if (maxDateStr) {
+    // Restamos 3 días a la última fecha registrada para contemplar latencia de procesamiento en GA4
+    const maxDate = new Date(maxDateStr);
+    maxDate.setDate(maxDate.getDate() - 3);
+    startDate = maxDate.toISOString().split('T')[0];
+    
+    console.log(`Borrando registros desde ${startDate} para carga incremental idempotente...`);
+    const deleteQuery = `DELETE FROM \`${projectId}.${DATASET_ID}.${TABLE_ID}\` WHERE date >= '${startDate}'`;
+    try {
+      await bq.query(deleteQuery);
+    } catch(e) {
+      console.log("Aviso en DELETE:", e.message);
+    }
+  }
+
+  return startDate;
+}
+
+async function fetchGA4Data(propertyId, startDate) {
   console.log(`Conectando a GA4 Propiedad: ${propertyId}...`);
-  // Usamos autenticación nativa (Application Default Credentials)
-  const analyticsDataClient = new BetaAnalyticsDataClient();
+  
+  const analyticsDataClient = new BetaAnalyticsDataClient({
+    credentials: {
+      client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+      client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+      refresh_token: process.env.GA4_REFRESH_TOKEN,
+      type: "authorized_user"
+    }
+  });
 
   const [response] = await analyticsDataClient.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [
       {
-        startDate: START_DATE,
+        startDate: startDate,
         endDate: END_DATE,
       },
     ],
@@ -71,7 +102,7 @@ async function fetchGA4Data(propertyId) {
       { name: 'date' },
       { name: 'sessionDefaultChannelGroup' },
       { name: 'sessionSourceMedium' },
-      { name: 'campaignName' }
+      { name: 'sessionCampaignName' }
     ],
     metrics: [
       { name: 'sessions' },
@@ -137,7 +168,10 @@ exports.syncGA4 = async (req, res) => {
     const bigquery = new BigQuery({ projectId });
     const bqTable = await setupBigQuery(bigquery, projectId);
 
-    const ga4Rows = await fetchGA4Data(propertyId);
+    const startDate = await getSyncStartDateAndClean(bigquery, projectId);
+    console.log(`Iniciando extracción incremental desde: ${startDate}`);
+
+    const ga4Rows = await fetchGA4Data(propertyId, startDate);
     
     if (ga4Rows.length === 0) {
        console.log("No hay datos de GA4 para insertar.");

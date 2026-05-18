@@ -1,62 +1,58 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Target, Eye, Award, Clock, RefreshCw, Plus, Trash2,
-  ShoppingCart, TrendingUp, ExternalLink, Search,
-  CheckCircle2, XCircle, CreditCard, Settings, ChevronDown,
+  Target, Eye, Award, Clock, TrendingUp, TrendingDown, Minus, ShoppingCart, X, Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+} from 'recharts';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface ResultItem {
-  position:  number;
-  title:     string;
-  source:    string;
-  price:     string;
-  thumbnail: string | null;
-  link:      string | null;
-  isOurs:    boolean;
+interface PositionHistory {
+  scan_date: string;
+  organic_position: number | null;
+  paid_position: number | null;
 }
 
 interface PositionData {
-  position:    number | null;
-  appeared:    boolean;
-  topResults:  ResultItem[];
-}
-
-interface ScanResult {
-  keyword:   string;
-  brand:     string;
-  country:   string;
-  organic:   PositionData;
-  paid:      PositionData;
-  scannedAt: string;
-  loading?:  boolean;
-  error?:    string;
+  keyword: string;
+  product_id: number;
+  organic_position: number | null;
+  paid_position: number | null;
+  top_competitor_name: string | null;
+  top_competitor_price: number | null;
+  scan_date: string | null;
+  scraped_at: string | null;
+  prev_organic_position: number | null;
+  prev_paid_position: number | null;
+  history: PositionHistory[];
 }
 
 type AdType = 'organic' | 'paid';
 
-const COUNTRY_OPTIONS = [
-  { label: 'EE.UU.',    value: 'us' },
-  { label: 'Chile',     value: 'cl' },
-  { label: 'México',    value: 'mx' },
-  { label: 'Argentina', value: 'ar' },
-  { label: 'Colombia',  value: 'co' },
-  { label: 'España',    value: 'es' },
-];
-
-const STORAGE_KEYS = { keywords: 'gsmpro_pos_keywords', brand: 'gsmpro_pos_brand', country: 'gsmpro_pos_country' };
-
-// ─── Position Badge ───────────────────────────────────────────────────────────
+function TrendIndicator({ current, prev }: { current: number | null; prev: number | null }) {
+  if (current === null && prev === null) return null;
+  if (current === null && prev !== null) {
+    return <span className="text-rose-400 flex items-center text-[10px] gap-0.5"><TrendingDown className="w-3 h-3" /> Perdió ranking</span>;
+  }
+  if (current !== null && prev === null) {
+    return <span className="text-emerald-400 flex items-center text-[10px] gap-0.5"><TrendingUp className="w-3 h-3" /> Nuevo ranking</span>;
+  }
+  if (current! < prev!) {
+    return <span className="text-emerald-400 flex items-center text-[10px] gap-0.5"><TrendingUp className="w-3 h-3" /> +{prev! - current!} pos</span>;
+  }
+  if (current! > prev!) {
+    return <span className="text-rose-400 flex items-center text-[10px] gap-0.5"><TrendingDown className="w-3 h-3" /> {prev! - current!} pos</span>;
+  }
+  return <span className="text-zinc-500 flex items-center text-[10px] gap-0.5"><Minus className="w-3 h-3" /> Sin cambios</span>;
+}
 
 function PositionBadge({ pos, type }: { pos: number | null; type: AdType }) {
   if (pos === null) {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] bg-zinc-800 text-zinc-500 border border-white/10 rounded-full px-2.5 py-0.5">
-        <XCircle className="w-2.5 h-2.5" /> No aparece
+        No aparece
       </span>
     );
   }
@@ -74,123 +70,166 @@ function PositionBadge({ pos, type }: { pos: number | null; type: AdType }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+function Sparkline({ data, dataKey, color }: { data: any[]; dataKey: string; color: string }) {
+  if (!data || data.length === 0) return <div className="w-24 h-8 bg-zinc-900/50 rounded animate-pulse" />;
+  
+  return (
+    <div className="w-24 h-10 cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center group relative">
+      <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
+      <ResponsiveContainer width="100%" height="80%">
+        <LineChart data={data}>
+          <YAxis reversed domain={[1, 'dataMax']} hide />
+          <Line 
+            type="monotone" 
+            dataKey={dataKey} 
+            stroke={color} 
+            strokeWidth={2} 
+            dot={false} 
+            connectNulls={true}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function HistoryModal({ 
+  isOpen, 
+  onClose, 
+  keyword, 
+  data, 
+  adType 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  keyword: string; 
+  data: PositionHistory[];
+  adType: AdType;
+}) {
+  if (!isOpen) return null;
+
+  const dataKey = adType === 'organic' ? 'organic_position' : 'paid_position';
+  const color = adType === 'organic' ? '#10b981' : '#3b82f6';
+
+  const validPositions = data.map(d => d[dataKey as keyof PositionHistory]).filter(p => p !== null) as number[];
+  const maxPos = validPositions.length > 0 ? Math.max(...validPositions) : 10;
+  const domainMax = Math.max(10, Math.ceil(maxPos / 10) * 10);
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col scale-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-6 border-b border-white/10">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-zinc-400" />
+              Historial de Posicionamiento
+            </h3>
+            <p className="text-sm text-zinc-400 mt-1">
+              Evolución de ranking para <span className="text-white font-medium">"{keyword}"</span> ({adType === 'organic' ? 'Orgánico' : 'Pagado'})
+            </p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="p-6 h-[400px]">
+          {validPositions.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-zinc-500">
+              No hay datos históricos registrados para este tipo de anuncio.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                <XAxis 
+                  dataKey="scan_date" 
+                  stroke="#a1a1aa" 
+                  fontSize={12} 
+                  tickMargin={10} 
+                  axisLine={false} 
+                  tickLine={false} 
+                />
+                <YAxis 
+                  reversed 
+                  domain={[1, domainMax]} 
+                  stroke="#a1a1aa" 
+                  fontSize={12} 
+                  axisLine={false} 
+                  tickLine={false}
+                  tickFormatter={(val) => `#${val}`}
+                  width={40}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#18181b', borderColor: '#ffffff10', borderRadius: '12px', color: '#fff' }}
+                  itemStyle={{ color: '#fff' }}
+                  formatter={(value: any) => [`Posición #${value}`, 'Ranking']}
+                  labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey={dataKey} 
+                  stroke={color} 
+                  strokeWidth={3}
+                  dot={{ r: 4, strokeWidth: 2, fill: '#18181b' }}
+                  activeDot={{ r: 6, strokeWidth: 0, fill: color }}
+                  connectNulls={true}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ShoppingPositionPage() {
-  const [mounted, setMounted]       = useState(false);
-  const [adType, setAdType]         = useState<AdType>('organic');
-  const [keywords, setKeywords]     = useState<string[]>([]);
-  const [newKw, setNewKw]           = useState('');
-  const [brand, setBrand]           = useState('GSMPRO');
-  const [country, setCountry]       = useState('us');
-  const [results, setResults]       = useState<Record<string, ScanResult>>({});
-  const [scanning, setScanning]     = useState(false);
-  const [expanded, setExpanded]     = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [searchesLeft, setSearchesLeft] = useState<number | null>(null);
-
-  useEffect(() => { setMounted(true); }, []);
+  const [data, setData] = useState<PositionData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [adType, setAdType] = useState<AdType>('organic');
+  const [selectedProduct, setSelectedProduct] = useState<{keyword: string, history: PositionHistory[]} | null>(null);
 
   useEffect(() => {
-    if (!mounted) return;
-    const kw  = localStorage.getItem(STORAGE_KEYS.keywords);
-    const br  = localStorage.getItem(STORAGE_KEYS.brand);
-    const co  = localStorage.getItem(STORAGE_KEYS.country);
-    if (kw) setKeywords(JSON.parse(kw));
-    if (br) setBrand(br);
-    if (co) setCountry(co);
-  }, [mounted]);
+    fetch('/api/inteligencia-mercado/shopping-position')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setData(json.data);
+        else setError(json.error);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
-  const persist = (kw: string[], br: string, co: string) => {
-    localStorage.setItem(STORAGE_KEYS.keywords, JSON.stringify(kw));
-    localStorage.setItem(STORAGE_KEYS.brand,    br);
-    localStorage.setItem(STORAGE_KEYS.country,  co);
-  };
-
-  const addKeyword = () => {
-    const kw = newKw.trim();
-    if (!kw || keywords.includes(kw)) return;
-    const next = [...keywords, kw];
-    setKeywords(next);
-    persist(next, brand, country);
-    setNewKw('');
-  };
-
-  const removeKeyword = (kw: string) => {
-    const next = keywords.filter(k => k !== kw);
-    setKeywords(next);
-    persist(next, brand, country);
-    setResults(prev => { const c = { ...prev }; delete c[kw]; return c; });
-  };
-
-  const scanOne = useCallback(async (kw: string): Promise<ScanResult | null> => {
-    const params = new URLSearchParams({ q: kw, brand, country });
-    try {
-      const res  = await fetch(`/api/inteligencia-mercado/shopping-position?${params}`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setSearchesLeft(json.data.rateLimit?.searchesLeft ?? null);
-      return json.data;
-    } catch (err: any) {
-      return { keyword: kw, brand, country, organic: { position: null, appeared: false, topResults: [] }, paid: { position: null, appeared: false, topResults: [] }, scannedAt: new Date().toISOString(), error: err.message };
-    }
-  }, [brand, country]);
-
-  const scanAll = async () => {
-    if (!keywords.length) return;
-    setScanning(true);
-    setResults(prev => {
-      const loading: Record<string, ScanResult> = {};
-      for (const kw of keywords) loading[kw] = { ...(prev[kw] ?? { keyword: kw, brand, country, organic: { position: null, appeared: false, topResults: [] }, paid: { position: null, appeared: false, topResults: [] }, scannedAt: '' }), loading: true };
-      return loading;
-    });
-    for (const kw of keywords) {
-      const res = await scanOne(kw);
-      if (res) setResults(prev => ({ ...prev, [kw]: { ...res, loading: false } }));
-    }
-    setScanning(false);
-  };
-
-  const scanSingle = async (kw: string) => {
-    setResults(prev => ({ ...prev, [kw]: { ...(prev[kw] ?? { keyword: kw, brand, country, organic: { position: null, appeared: false, topResults: [] }, paid: { position: null, appeared: false, topResults: [] }, scannedAt: '' }), loading: true } }));
-    const res = await scanOne(kw);
-    if (res) setResults(prev => ({ ...prev, [kw]: { ...res, loading: false } }));
-  };
-
-  const scannedResults = Object.values(results).filter(r => !r.loading && !r.error);
-  const appeared       = scannedResults.filter(r => (adType === 'organic' ? r.organic : r.paid).appeared).length;
-  const positions      = scannedResults.map(r => (adType === 'organic' ? r.organic : r.paid).position).filter((p): p is number => p !== null);
-  const avgPos         = positions.length ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length * 10) / 10 : null;
-  const bestPos        = positions.length ? Math.min(...positions) : null;
-
-  if (!mounted) return null;
+  const appeared  = data.filter(r => (adType === 'organic' ? r.organic_position : r.paid_position) !== null).length;
+  const positions = data.map(r => (adType === 'organic' ? r.organic_position : r.paid_position)).filter((p): p is number => p !== null);
+  const avgPos    = positions.length ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length * 10) / 10 : null;
+  const bestPos   = positions.length ? Math.min(...positions) : null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Posicionamiento Shopping</h1>
           <p className="text-zinc-400 mt-1">
-            Rastrea tu posición orgánica y pagada en Google Shopping por keyword.
+            Top 30 productos con mayor tracción. Datos actualizados automáticamente.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {searchesLeft !== null && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-zinc-950/50 text-sm">
-              <CreditCard className="w-4 h-4 text-zinc-500" />
-              <span className="text-zinc-400">{searchesLeft.toLocaleString()} créditos</span>
-            </div>
-          )}
-          <button
-            onClick={() => setShowSettings(s => !s)}
-            className={cn('flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all', showSettings ? 'bg-white/10 border-white/20 text-white' : 'border-white/10 text-zinc-400 hover:text-white hover:bg-white/5')}
-          >
-            <Settings className="w-4 h-4" />
-            Config.
-          </button>
-          {/* Paid / Organic toggle */}
           <div className="flex bg-zinc-900/60 border border-white/10 rounded-xl p-1 gap-1">
             <button
               onClick={() => setAdType('organic')}
@@ -210,193 +249,102 @@ export default function ShoppingPositionPage() {
         </div>
       </div>
 
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="p-5 rounded-2xl border border-white/10 bg-zinc-950/60 flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label className="text-xs text-zinc-500 uppercase tracking-widest mb-1.5 block">Nombre de nuestra tienda</label>
-            <input
-              type="text"
-              value={brand}
-              onChange={e => { setBrand(e.target.value); persist(keywords, e.target.value, country); }}
-              placeholder="ej. GSMPRO, Importadora GSMPRO"
-              className="w-full bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
-            />
-            <p className="text-[10px] text-zinc-600 mt-1">Coincidencia parcial — búsqueda no sensible a mayúsculas</p>
-          </div>
-          <div>
-            <label className="text-xs text-zinc-500 uppercase tracking-widest mb-1.5 block">País</label>
-            <select
-              value={country}
-              onChange={e => { setCountry(e.target.value); persist(keywords, brand, e.target.value); }}
-              className="w-full md:w-36 bg-zinc-900/60 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
-            >
-              {COUNTRY_OPTIONS.map(c => <option key={c.value} value={c.value} className="bg-zinc-900">{c.label}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Add keyword + Scan All */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-          <input
-            type="text"
-            value={newKw}
-            onChange={e => setNewKw(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addKeyword()}
-            placeholder='Añadir keyword (ej. "iPhone 15 case")'
-            className="w-full bg-zinc-900/60 border border-white/10 text-white placeholder-zinc-600 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
-          />
-        </div>
-        <button
-          onClick={addKeyword}
-          disabled={!newKw.trim()}
-          className="flex items-center gap-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 border border-white/10 text-white px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" /> Añadir
-        </button>
-        <button
-          onClick={scanAll}
-          disabled={scanning || !keywords.length}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap"
-        >
-          <RefreshCw className={cn('w-4 h-4', scanning && 'animate-spin')} />
-          {scanning ? 'Escaneando…' : `Escanear todo (${keywords.length})`}
-        </button>
-      </div>
-
-      {/* KPI summary (only when there are scan results) */}
-      {scannedResults.length > 0 && (
+      {!loading && !error && data.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard title="Keywords rastreadas" value={String(keywords.length)} sub="En tu lista de monitoreo" icon={Target} color="blue" />
-          <KpiCard title="Tasa de visibilidad" value={`${Math.round((appeared / scannedResults.length) * 100)}%`} sub={`${adType === 'organic' ? 'Orgánico' : 'Pagado'} · ${appeared} de ${scannedResults.length}`} icon={Eye} color="emerald" />
+          <KpiCard title="Productos rastreados" value={String(data.length)} sub="Top 30 (ventas 30d)" icon={Target} color="blue" />
+          <KpiCard title="Tasa de visibilidad" value={`${Math.round((appeared / data.length) * 100)}%`} sub={`${adType === 'organic' ? 'Orgánico' : 'Pagado'} · ${appeared} de ${data.length}`} icon={Eye} color="emerald" />
           <KpiCard title="Mejor posición" value={bestPos ? `#${bestPos}` : '—'} sub="Top ranking actual" icon={Award} color="amber" />
           <KpiCard title="Posición promedio" value={avgPos ? `#${avgPos}` : '—'} sub={`Modo ${adType === 'organic' ? 'orgánico' : 'pagado'}`} icon={Clock} color="violet" />
         </div>
       )}
 
-      {/* Keyword list */}
-      {keywords.length === 0 ? (
+      {loading ? (
+        <div className="p-16 text-center text-zinc-500 animate-pulse">Cargando datos históricos...</div>
+      ) : error ? (
+        <div className="p-16 text-center text-rose-500 bg-rose-500/10 rounded-2xl border border-rose-500/20">{error}</div>
+      ) : data.length === 0 ? (
         <div className="p-16 rounded-3xl border border-white/10 bg-zinc-950/50 text-center">
           <Target className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-          <h3 className="text-white font-semibold text-lg mb-2">Sin keywords monitoreadas</h3>
+          <h3 className="text-white font-semibold text-lg mb-2">Sin datos disponibles</h3>
           <p className="text-zinc-500 text-sm max-w-sm mx-auto">
-            Añade las keywords de tus productos para ver tu posición en Google Shopping frente a la competencia.
+            El proceso automático de escaneo aún no ha insertado registros.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {keywords.map(kw => {
-            const r        = results[kw];
-            const data     = r ? (adType === 'organic' ? r.organic : r.paid) : null;
-            const isLoading = r?.loading ?? false;
-            const isExpanded = expanded === kw;
-
-            return (
-              <div key={kw} className="rounded-2xl border border-white/5 bg-zinc-950/40 overflow-hidden">
-                {/* Row */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  {/* Expand toggle */}
-                  <button
-                    onClick={() => setExpanded(isExpanded ? null : kw)}
-                    disabled={!data?.topResults?.length}
-                    className="text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronDown className={cn('w-4 h-4 transition-transform', isExpanded && 'rotate-180')} />
-                  </button>
-
-                  {/* Position badge */}
-                  {isLoading ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] bg-zinc-800 text-zinc-500 border border-white/10 rounded-full px-2.5 py-0.5 animate-pulse">
-                      Escaneando…
-                    </span>
-                  ) : data ? (
-                    <PositionBadge pos={data.position} type={adType} />
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] bg-zinc-900 text-zinc-600 border border-white/5 rounded-full px-2.5 py-0.5">
-                      Sin escanear
-                    </span>
-                  )}
-
-                  {/* Keyword */}
-                  <span className="flex-1 text-white text-sm font-medium">{kw}</span>
-
-                  {/* Competitor info */}
-                  {data?.appeared && data.topResults[0] && (
-                    <span className="text-zinc-500 text-xs hidden md:block">
-                      Top: <span className="text-zinc-300">{data.topResults[0].source}</span>
-                    </span>
-                  )}
-
-                  {/* Error */}
-                  {r?.error && !isLoading && (
-                    <span className="text-rose-400 text-xs">{r.error}</span>
-                  )}
-
-                  {/* Scan single */}
-                  <button
-                    onClick={() => scanSingle(kw)}
-                    disabled={isLoading}
-                    className="text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-30"
-                  >
-                    <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
-                  </button>
-
-                  {/* Remove */}
-                  <button onClick={() => removeKeyword(kw)} className="text-zinc-700 hover:text-rose-400 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Expanded top results */}
-                {isExpanded && data != null && (data.topResults?.length ?? 0) > 0 && (
-                  <div className="border-t border-white/5 bg-zinc-900/30 px-4 py-3">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">
-                      Top resultados {adType === 'organic' ? 'orgánicos' : 'pagados'}
-                    </p>
-                    <div className="space-y-2">
-                      {data.topResults!.map((item, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            'flex items-center gap-3 rounded-xl px-3 py-2 text-xs',
-                            item.isOurs ? 'bg-blue-500/10 border border-blue-500/20' : 'hover:bg-white/5',
-                          )}
-                        >
-                          {item.thumbnail && (
-                            <img src={item.thumbnail} alt="" className="w-8 h-8 rounded-lg object-cover bg-zinc-800 flex-shrink-0" />
-                          )}
-                          <span className="text-zinc-500 font-mono w-4 flex-shrink-0">#{item.position}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className={cn('font-medium truncate', item.isOurs ? 'text-blue-300' : 'text-zinc-300')}>
-                              {item.source}
-                              {item.isOurs && <span className="ml-1.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full border border-blue-500/30">Nosotros</span>}
-                            </p>
-                            <p className="text-zinc-600 truncate">{item.title}</p>
-                          </div>
-                          <span className="text-zinc-400 font-mono flex-shrink-0">{item.price}</span>
-                          {item.link && (
-                            <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-300">
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+        <div className="bg-zinc-900/40 border border-white/10 rounded-2xl overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/60 border-b border-white/5">
+              <tr>
+                <th className="px-6 py-4 font-semibold tracking-wider">Producto (Keyword)</th>
+                <th className="px-6 py-4 font-semibold tracking-wider">Posición {adType === 'organic' ? 'Orgánica' : 'Pagada'}</th>
+                <th className="px-6 py-4 font-semibold tracking-wider text-center">Tendencia</th>
+                <th className="px-6 py-4 font-semibold tracking-wider">Top Competidor</th>
+                <th className="px-6 py-4 font-semibold tracking-wider text-right">Actualizado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {data.map((item, idx) => {
+                const currentPos = adType === 'organic' ? item.organic_position : item.paid_position;
+                const prevPos = adType === 'organic' ? item.prev_organic_position : item.prev_paid_position;
+                return (
+                  <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-white">{item.keyword}</div>
+                      <div className="text-xs text-zinc-500 font-mono mt-0.5">ID: {item.product_id}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <PositionBadge pos={currentPos} type={adType} />
+                        <TrendIndicator current={currentPos} prev={prevPos} />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-center" onClick={() => setSelectedProduct({ keyword: item.keyword, history: item.history || [] })}>
+                        <Sparkline 
+                          data={item.history || []} 
+                          dataKey={adType === 'organic' ? 'organic_position' : 'paid_position'} 
+                          color={adType === 'organic' ? '#10b981' : '#3b82f6'} 
+                        />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {item.top_competitor_name ? (
+                        <div>
+                          <div className="text-zinc-300 font-medium">{item.top_competitor_name}</div>
+                          {item.top_competitor_price && (
+                            <div className="text-xs text-zinc-500 mt-0.5">${item.top_competitor_price.toLocaleString()}</div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-zinc-400">{item.scan_date}</div>
+                      {item.scraped_at && (
+                        <div className="text-xs text-zinc-600 mt-0.5">
+                          {new Date(item.scraped_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
+      
+      <HistoryModal 
+        isOpen={selectedProduct !== null} 
+        onClose={() => setSelectedProduct(null)} 
+        keyword={selectedProduct?.keyword || ''} 
+        data={selectedProduct?.history || []} 
+        adType={adType} 
+      />
     </div>
   );
 }
-
-// ─── KpiCard ─────────────────────────────────────────────────────────────────
 
 function KpiCard({ title, value, sub, icon: Icon, color }: {
   title: string; value: string; sub: string; icon: any;

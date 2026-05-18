@@ -1,0 +1,10 @@
+{
+  "name": "sync-shopping-position",
+  "version": "1.0.0",
+  "description": "Sync Shopping Position to BigQuery",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/bigquery": "^7.3.0",
+    "dotenv": "^16.4.5"
+  }
+}

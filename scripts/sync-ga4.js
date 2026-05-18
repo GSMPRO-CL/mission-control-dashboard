@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 const { BigQuery } = require('@google-cloud/bigquery');
+const { OAuth2Client } = require('google-auth-library');
 
 // Configuración
 const PROPERTY_ID = process.env.GA4_PROPERTY_ID;
@@ -59,9 +60,14 @@ async function setupBigQuery(bq) {
 
 async function fetchGA4Data() {
   console.log(`Conectando a GA4 Propiedad: ${PROPERTY_ID}...`);
-  // Inicializamos el cliente de GA4 usando el service account key explícitamente
+  
   const analyticsDataClient = new BetaAnalyticsDataClient({
-    keyFilename: 'google_analytics.json'
+    credentials: {
+      client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+      client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+      refresh_token: process.env.GA4_REFRESH_TOKEN,
+      type: "authorized_user"
+    }
   });
 
   const [response] = await analyticsDataClient.runReport({
@@ -76,7 +82,7 @@ async function fetchGA4Data() {
       { name: 'date' },
       { name: 'sessionDefaultChannelGroup' },
       { name: 'sessionSourceMedium' },
-      { name: 'campaignName' }
+      { name: 'sessionCampaignName' }
     ],
     metrics: [
       { name: 'sessions' },

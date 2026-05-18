@@ -14,3 +14,4 @@ dashboard/skills-lock.json
 # Secrets
 google_analytics.json
 
+env.yaml

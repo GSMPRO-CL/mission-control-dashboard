@@ -9,6 +9,7 @@
   "dependencies": {
     "@google-analytics/data": "^4.10.0",
     "@google-cloud/bigquery": "^7.9.0",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "google-auth-library": "^10.6.2"
   }
 }
